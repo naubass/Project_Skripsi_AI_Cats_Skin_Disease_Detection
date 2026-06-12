@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sakti Pet Care - CatSkin AI | Klasifikasi Penyakit Kulit Kucing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --purple-deep:   #2d1b69;
+      --purple-mid:    #4c2fa0;
+      --purple-light:  #7c5cbf;
+      --purple-pale:   #ede8f8;
+      --gold:          #d4a843;
+      --gold-light:    #f5e3a3;
+      --gold-pale:     #fdf8ec;
+      --cream:         #faf8f5;
+      --text-dark:     #1a1128;
+      --text-mid:      #4a3f6b;
+      --text-soft:     #8b7fb8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background-color: var(--cream);
+      color: var(--text-dark);
+      overflow-x: hidden;
+    }
+
+    .serif { font-family: 'Cormorant Garamond', serif; }
+
+    /* ── Nav ── */
+    .glass-nav {
+      background: rgba(250, 248, 245, 0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(212, 168, 67, 0.2);
+    }
+
+    /* ── Buttons ── */
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold) 0%, #c8962e 100%);
+      color: var(--purple-deep);
+      font-weight: 700;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 20px rgba(212, 168, 67, 0.35);
+    }
+    .btn-gold:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 30px rgba(212, 168, 67, 0.5);
+    }
+
+    .btn-purple {
+      background: linear-gradient(135deg, var(--purple-mid) 0%, var(--purple-deep) 100%);
+      color: #fff;
+      font-weight: 700;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 20px rgba(76, 47, 160, 0.3);
+    }
+    .btn-purple:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 30px rgba(76, 47, 160, 0.45);
+    }
+
+    /* ── Hero ── */
+    .hero-bg {
+      background: linear-gradient(145deg, var(--purple-deep) 0%, #3d2580 40%, var(--purple-mid) 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle at 20% 50%, rgba(212,168,67,0.12) 0%, transparent 60%),
+                        radial-gradient(circle at 80% 20%, rgba(124,92,191,0.3) 0%, transparent 50%);
+    }
+    .hero-paw-pattern {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Ctext x='10' y='50' font-size='36' fill='white'%3E🐾%3C/text%3E%3C/svg%3E");
+      background-size: 80px 80px;
+    }
+
+    /* ── Badge ── */
+    .badge-gold {
+      background: linear-gradient(135deg, var(--gold-pale), var(--gold-light));
+      border: 1px solid rgba(212,168,67,0.4);
+      color: #8a6200;
+    }
+
+    /* ── Cards ── */
+    .card-main {
+      background: #fff;
+      border: 1px solid rgba(212, 168, 67, 0.15);
+      border-radius: 24px;
+      box-shadow: 0 4px 24px rgba(45, 27, 105, 0.06);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .card-main:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px rgba(45, 27, 105, 0.12);
+    }
+
+    /* ── Dropzone ── */
+    .dropzone-area {
+      border: 2px dashed rgba(124, 92, 191, 0.3);
+      border-radius: 20px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--purple-pale) 0%, #fff 100%);
+    }
+    .dropzone-area:hover {
+      border-color: var(--purple-mid);
+      background: linear-gradient(135deg, var(--purple-pale) 0%, var(--gold-pale) 100%);
+    }
+
+    /* ── Camera ── */
+    #camera-container {
+      position: relative;
+      background: #000;
+      border-radius: 20px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+    }
+    #video-feed { width: 100%; height: 100%; object-fit: cover; }
+
+    /* ── Confidence bar ── */
+    .conf-track {
+      height: 10px;
+      background: var(--purple-pale);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .conf-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── Section Divider ── */
+    .section-divider {
+      width: 64px;
+      height: 3px;
+      background: linear-gradient(90deg, var(--gold), transparent);
+      border-radius: 2px;
+      margin: 16px auto 0;
+    }
+
+    /* ── Disease card ── */
+    .disease-card {
+      background: #fff;
+      border-radius: 20px;
+      border: 1px solid rgba(212, 168, 67, 0.15);
+      padding: 28px;
+      transition: all 0.3s ease;
+    }
+    .disease-card:hover {
+      border-color: var(--gold);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(45,27,105,0.10);
+    }
+
+    /* ── Clinic section ── */
+    .clinic-bg {
+      background: linear-gradient(145deg, var(--purple-deep) 0%, #1a0f4a 100%);
+    }
+
+    /* ── Animations ── */
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in { animation: fade-in-up 0.5s ease-out forwards; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50%       { transform: translateY(-12px); }
+    }
+    .animate-float { animation: float 4s ease-in-out infinite; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 0.9s linear infinite; }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+    /* ── Step number ── */
+    .step-num {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold), #c8962e);
+      color: var(--purple-deep);
+      font-weight: 800;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── Result ── */
+    #result-view { min-height: 520px; }
+
+    .result-header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: var(--purple-pale);
+      color: var(--purple-mid);
+    }
+
+    /* ── Prob mini-bars ── */
+    .mini-bar-track {
+      height: 6px;
+      background: var(--purple-pale);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .mini-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── Advice item ── */
+    .advice-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: var(--cream);
+      border: 1px solid rgba(212,168,67,0.15);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-mid);
+      line-height: 1.5;
+    }
+    .advice-check {
+      width: 18px; height: 18px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--gold), #c8962e);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px;
+      color: var(--purple-deep);
+      font-weight: 900;
+      margin-top: 1px;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--purple-pale); }
+    ::-webkit-scrollbar-thumb { background: var(--purple-light); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════ NAVBAR ══════════════ -->
+<nav class="fixed top-0 w-full z-50 glass-nav">
+  <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+    <a href="#" class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-xl overflow-hidden shadow-lg border border-purple-100 bg-white flex items-center justify-center">
+        <img 
+          src="https://media-cgk2-1.cdn.whatsapp.net/v/t61.24694-24/437075921_972088971643518_7063574736608123693_n.jpg?ccb=11-4&oh=01_Q5Aa4wEQzMNNJFGs0aCdlpjEQN7ietCFtL2qMG-k10Wkr34bSA&oe=6A35F943&_nc_sid=5e03e0&_nc_cat=101" 
+          alt="Logo Sakti Pet Care"
+          class="w-full h-full object-cover"
+          onerror="this.src='https://via.placeholder.com/100?text=SPC'"
+        />
+      </div>
+      <div>
+        <span class="serif font-bold text-xl" style="color:var(--purple-deep)">Sakti Pet Care</span>
+        <span class="block text-[10px] font-bold tracking-widest uppercase" style="color:var(--gold)">CatSkin AI · Diagnostik Kulit Kucing</span>
+      </div>
+    </a>
+    <div class="hidden md:flex items-center gap-8">
+      <a href="#hero"     class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Beranda</a>
+      <a href="#analyze"  class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Analisis</a>
+      <a href="#diseases" class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Penyakit</a>
+      <a href="#clinic"   class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Klinik</a>
+      <a href="/history"  class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Riwayat</a>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if user %}
+      <a href="/logout" class="hidden md:inline text-sm font-semibold hover:text-red-600 transition-colors" style="color:var(--text-soft)">Logout</a>
+      <span class="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold"
+            style="background:var(--purple-pale);color:var(--purple-mid)">
+        👤 {{ user.name }}
+      </span>
+      {% endif %}
+      <a href="#analyze" class="btn-gold px-6 py-2.5 rounded-full text-sm">🔬 Mulai Cek</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════ HERO ══════════════ -->
+<section id="hero" class="hero-bg pt-32 pb-20 px-6">
+  <div class="hero-paw-pattern"></div>
+  <div class="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center relative z-10">
+    <!-- Text -->
+    <div>
+      <div class="badge-gold inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider mb-8">
+        <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+        Powered by ResNet-50 · FastAPI Backend
+      </div>
+      <h1 class="serif text-5xl md:text-7xl font-bold text-white leading-tight mb-6">
+        Deteksi<br/>
+        <span class="italic" style="color:var(--gold)">Penyakit Kulit</span><br/>
+        Kucing Instan
+      </h1>
+      <p class="text-lg mb-10 max-w-lg leading-relaxed" style="color:rgba(255,255,255,0.7)">
+        Teknologi AI Sakti Pet Care untuk mengidentifikasi 4 kondisi kulit kucing—Flea Allergy, Ringworm, Scabies, dan kondisi Sehat—melalui foto atau kamera langsung.
+      </p>
+      <div class="flex flex-wrap gap-4">
+        <a href="#analyze" class="btn-gold px-8 py-4 rounded-2xl text-base">🔬 Mulai Analisis</a>
+        <a href="#diseases" class="px-8 py-4 rounded-2xl text-base font-bold border transition-all hover:bg-white/10" style="color:white;border-color:rgba(255,255,255,0.3)">Pelajari Penyakit</a>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="flex gap-8 mt-12">
+        <div>
+          <p class="serif text-3xl font-bold" style="color:var(--gold)">4</p>
+          <p class="text-xs font-semibold" style="color:rgba(255,255,255,0.5)">Kondisi Terdeteksi</p>
+        </div>
+        <div class="w-px" style="background:rgba(255,255,255,0.1)"></div>
+        <div>
+          <p class="serif text-3xl font-bold" style="color:var(--gold)">ResNet‑50</p>
+          <p class="text-xs font-semibold" style="color:rgba(255,255,255,0.5)">Model AI</p>
+        </div>
+        <div class="w-px" style="background:rgba(255,255,255,0.1)"></div>
+        <div>
+          <p class="serif text-3xl font-bold" style="color:var(--gold)">Real-time</p>
+          <p class="text-xs font-semibold" style="color:rgba(255,255,255,0.5)">Hasil Instan</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hero Image -->
+    <div class="relative flex justify-center">
+      <!-- Glow Effect di belakang (diperbesar dari w-80 ke w-[500px]) -->
+      <div class="w-[450px] h-[450px] md:w-[500px] md:h-[500px] rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style="background:radial-gradient(circle,rgba(212,168,67,0.2) 0%,transparent 70%)"></div>
+      
+      <div class="animate-float relative z-10">
+        <!-- Decorative ring (diperbesar dari w-72 ke w-96) -->
+        <div class="w-80 h-80 md:w-96 md:h-96 rounded-full border flex items-center justify-center" style="border-color:rgba(212,168,67,0.3);background:rgba(255,255,255,0.05);backdrop-filter:blur(4px)">
+          
+          <!-- Frame Gambar Utama (diperbesar dari w-60 ke w-80) -->
+          <div class="w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden border-4 shadow-2xl" style="border-color:var(--gold)">
+            <img src="https://i.pinimg.com/736x/2a/04/04/2a0404ce2a65687cee7b25b1f6ebe92e.jpg"
+                onerror="this.src='https://placekitten.com/500/500'"
+                class="w-full h-full object-cover" alt="Kucing Sehat">
+          </div>
+        </div>
+        
+        <!-- Gold badge (posisi disesuaikan dengan ukuran baru) -->
+        <div class="absolute -bottom-2 left-1/2 -translate-x-1/2 badge-gold px-6 py-2.5 rounded-full font-bold text-sm whitespace-nowrap shadow-lg">
+          🐱 Sakti Pet Care AI
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ ANALYZE TOOL ══════════════ -->
+<section id="analyze" class="py-24 px-6" style="background:var(--cream)">
+  <div class="max-w-7xl mx-auto">
+    <div class="text-center mb-16">
+      <span class="result-header-badge">Alat Diagnosis</span>
+      <h2 class="serif text-4xl font-bold mt-4" style="color:var(--purple-deep)">Mulai Pemeriksaan</h2>
+      <div class="section-divider"></div>
+      <p class="mt-6 max-w-xl mx-auto" style="color:var(--text-soft)">Pastikan pencahayaan cukup dan area kulit kucing terlihat jelas untuk akurasi diagnosis yang optimal.</p>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-8 items-start">
+      <!-- ── Input Panel ── -->
+      <div class="card-main p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="step-num">1</div>
+          <div>
+            <h3 class="text-lg font-bold" style="color:var(--purple-deep)">Unggah atau Ambil Foto</h3>
+            <p class="text-xs" style="color:var(--text-soft)">Format JPG, PNG, WEBP</p>
+          </div>
+        </div>
+
+        <!-- Camera Area -->
+        <div id="camera-box" class="hidden mb-6 animate-fade-in">
+          <div id="camera-container">
+            <video id="video-feed" autoplay playsinline></video>
+          </div>
+          <div class="flex gap-3 mt-4">
+            <button onclick="capturePhoto()" class="btn-gold flex-1 py-3 rounded-xl">📸 Ambil Foto</button>
+            <button onclick="stopCamera()" class="px-6 py-3 rounded-xl font-bold border transition-all hover:bg-purple-50" style="color:var(--text-mid);border-color:var(--purple-pale)">Batal</button>
+          </div>
+        </div>
+
+        <!-- Dropzone -->
+        <div id="dropzone" class="dropzone-area p-12 text-center" onclick="document.getElementById('file-input').click()">
+          <input type="file" id="file-input" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+          <div id="upload-placeholder">
+            <div class="text-5xl mb-4">🐾</div>
+            <p class="font-bold" style="color:var(--purple-mid)">Klik untuk Unggah Foto</p>
+            <p class="text-sm mt-1" style="color:var(--text-soft)">atau seret foto kucing ke sini</p>
+          </div>
+          <div id="preview-box" class="hidden">
+            <img id="preview-img" src="#" class="max-h-64 mx-auto rounded-2xl shadow-lg border-4 border-white mb-3">
+            <p id="file-info" class="text-xs font-mono" style="color:var(--text-soft)"></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mt-6">
+          <button onclick="startCamera()" class="flex items-center justify-center gap-2 py-4 rounded-2xl font-bold border-2 transition-all hover:border-purple-400 hover:bg-purple-50" style="color:var(--text-mid);border-color:var(--purple-pale)">
+            Buka Kamera
+          </button>
+          <button id="analyze-btn" disabled onclick="processAnalysis()" class="btn-purple py-4 rounded-2xl disabled:opacity-30 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none">
+            Analisis Sekarang
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Result Panel ── -->
+      <div id="result-view" class="card-main p-8">
+        <!-- Empty State -->
+        <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center py-20">
+          <div class="w-24 h-24 rounded-full flex items-center justify-center text-5xl mb-6" style="background:var(--purple-pale)">🔬</div>
+          <h3 class="text-xl font-bold" style="color:var(--purple-deep)">Menunggu Gambar</h3>
+          <p class="mt-2 max-w-xs" style="color:var(--text-soft)">Hasil analisis AI akan tampil di sini setelah Anda mengunggah foto kucing.</p>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading-state" class="hidden h-full flex flex-col items-center justify-center text-center py-20">
+          <div class="w-14 h-14 rounded-full border-4 border-purple-100 border-t-purple-600 animate-spin mb-6"></div>
+          <p class="font-bold animate-pulse" style="color:var(--purple-mid)">Menghubungi Server AI…</p>
+          <p class="text-xs mt-2" style="color:var(--text-soft)">Sakti Pet Care CatSkin sedang menganalisis</p>
+        </div>
+
+        <!-- Result Content -->
+        <div id="result-content" class="hidden space-y-7 animate-fade-in">
+          <!-- Header -->
+          <div class="flex items-center gap-5 pb-6" style="border-bottom:1px solid var(--purple-pale)">
+            <div id="res-emoji" class="text-4xl w-20 h-20 rounded-2xl flex items-center justify-center flex-shrink-0" style="background:var(--purple-pale)"></div>
+            <div>
+              <span class="result-header-badge mb-2 inline-block">Hasil Diagnosis Sakti Pet Care</span>
+              <h3 id="res-label" class="serif text-3xl font-bold" style="color:var(--purple-deep)"></h3>
+              <p id="res-confidence-text" class="text-sm font-bold mt-1" style="color:var(--gold)"></p>
+            </div>
+          </div>
+
+          <!-- Confidence Bar -->
+          <div class="p-5 rounded-2xl" style="background:var(--purple-pale)">
+            <div class="flex justify-between items-end mb-3">
+              <span class="text-sm font-bold" style="color:var(--text-mid)">Tingkat Keyakinan AI</span>
+              <span id="res-percent" class="text-2xl font-black serif" style="color:var(--purple-mid)">0%</span>
+            </div>
+            <div class="conf-track">
+              <div id="res-bar" class="conf-fill" style="width:0%;background:linear-gradient(90deg,var(--purple-mid),var(--purple-light))"></div>
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div>
+            <h4 class="font-bold mb-2 flex items-center gap-2" style="color:var(--purple-deep)">📋 Penjelasan</h4>
+            <p id="res-description" class="text-sm leading-relaxed" style="color:var(--text-mid)"></p>
+          </div>
+
+          <!-- Advice -->
+          <div>
+            <h4 class="font-bold mb-3 flex items-center gap-2" style="color:var(--purple-deep)">💡 Langkah Penanganan</h4>
+            <ul id="res-advice" class="space-y-2"></ul>
+          </div>
+
+          <!-- All Probs -->
+          <div class="pt-5" style="border-top:1px solid var(--purple-pale)">
+            <h4 class="font-bold mb-4 flex items-center gap-2" style="color:var(--purple-deep)">📊 Analisis Semua Kondisi</h4>
+            <div id="res-all-probs" class="space-y-3"></div>
+          </div>
+
+          <button onclick="resetApp()" class="w-full py-4 rounded-2xl font-bold border-2 transition-all hover:bg-purple-50" style="color:var(--text-soft);border-color:var(--purple-pale)">
+            Ulangi Analisis
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ DISEASE DATABASE ══════════════ -->
+<section id="diseases" class="py-24 px-6 bg-white">
+  <div class="max-w-7xl mx-auto">
+    <div class="text-center mb-16">
+      <span class="result-header-badge">Database Kondisi</span>
+      <h2 class="serif text-4xl font-bold mt-4" style="color:var(--purple-deep)">4 Kondisi yang Dideteksi</h2>
+      <div class="section-divider"></div>
+      <p class="mt-6 max-w-xl mx-auto" style="color:var(--text-soft)">Pelajari karakteristik kondisi kulit yang didukung sistem AI Sakti Pet Care.</p>
+    </div>
+    <div id="disease-cards" class="grid md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+  </div>
+</section>
+
+<!-- ══════════════ CLINIC SECTION ══════════════ -->
+<section id="clinic" class="py-24 px-6 clinic-bg relative overflow-hidden">
+  <!-- Decorative orbs -->
+  <div class="absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[120px]" style="background:rgba(212,168,67,0.08);transform:translate(50%,-50%)"></div>
+  <div class="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full blur-[100px]" style="background:rgba(124,92,191,0.15);transform:translate(-50%,50%)"></div>
+
+  <div class="max-w-7xl mx-auto relative z-10">
+    <div class="grid lg:grid-cols-3 gap-12 items-center">
+      <!-- Left info -->
+      <div class="lg:col-span-1">
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-6" style="background:rgba(212,168,67,0.15)">🏥</div>
+        <h2 class="serif text-4xl font-bold text-white mb-4">Kunjungi Klinik Kami</h2>
+        <p class="mb-8 leading-relaxed" style="color:rgba(255,255,255,0.65)">
+          Hasil AI adalah deteksi awal. Untuk penanganan medis profesional, kunjungi atau hubungi Sakti Pet Care — klinik hewan lengkap di Tangerang.
+        </p>
+        <!-- Phone -->
+        <div class="inline-flex items-center gap-4 p-4 rounded-2xl border" style="background:rgba(255,255,255,0.05);border-color:rgba(212,168,67,0.3)">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(212,168,67,0.2)">📞</div>
+          <div>
+            <p class="text-xs font-bold uppercase tracking-widest" style="color:var(--gold)">Hotline</p>
+            <p class="font-bold text-white">(0852) 1924 1488</p>
+            <p class="font-bold text-white">(0852) 1132 2390</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clinic cards -->
+      <div class="lg:col-span-2 grid md:grid-cols-2 gap-6">
+        <!-- Card 1 -->
+        <div class="bg-white rounded-3xl p-6 shadow-2xl" style="color:var(--text-dark)">
+          <div class="flex justify-between items-start mb-1">
+            <h4 class="font-bold text-lg" style="color:var(--purple-deep)">Sakti Pet Care</h4>
+            <span class="px-2 py-1 rounded text-[10px] font-bold" style="background:var(--gold-pale);color:#8a6200">UTAMA</span>
+          </div>
+          <p class="text-xs mb-1" style="color:var(--text-soft)">Klinik Hewan Lengkap</p>
+          <p class="text-sm mb-4 flex items-center gap-2" style="color:var(--text-mid)">
+            <span>📍</span> Jln. Raya Binong Permai Blok K2 No.11A, Kel. Binong, Kab. Tangerang 115810
+          </p>
+          <!-- Services -->
+          <div class="flex flex-wrap gap-2 mb-5">
+            <span class="px-2 py-1 rounded-lg text-[10px] font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">🐾 Pet Food</span>
+            <span class="px-2 py-1 rounded-lg text-[10px] font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">🩺 Dokter Hewan</span>
+            <span class="px-2 py-1 rounded-lg text-[10px] font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">✂️ Grooming</span>
+            <span class="px-2 py-1 rounded-lg text-[10px] font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">🏨 Rawat Inap</span>
+            <span class="px-2 py-1 rounded-lg text-[10px] font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">💉 Vaksinasi</span>
+            <span class="px-2 py-1 rounded-lg text-[10px] font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">🔬 Laboratorium</span>
+          </div>
+          <a href="tel:085219241488" class="block w-full text-center py-3 rounded-xl font-bold text-sm text-white transition-all hover:opacity-90" style="background:linear-gradient(135deg,var(--purple-mid),var(--purple-deep))">
+            Hubungi Sekarang
+          </a>
+        </div>
+
+        <!-- Card 2 — Operasi -->
+        <div class="bg-white rounded-3xl p-6 shadow-2xl" style="color:var(--text-dark)">
+          <div class="flex justify-between items-start mb-1">
+            <h4 class="font-bold text-lg" style="color:var(--purple-deep)">Layanan Operasi</h4>
+            <span class="px-2 py-1 rounded text-[10px] font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">MEDIS</span>
+          </div>
+          <p class="text-xs mb-4" style="color:var(--text-soft)">Penanganan Bedah & Spesialis</p>
+          <div class="space-y-3 mb-5">
+            <div class="flex items-center gap-3 text-sm" style="color:var(--text-mid)">
+              <span class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--gold-pale)">🔪</span>
+              Operasi & Bedah Minor / Mayor
+            </div>
+            <div class="flex items-center gap-3 text-sm" style="color:var(--text-mid)">
+              <span class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--gold-pale)">🧪</span>
+              Pemeriksaan Laboratorium
+            </div>
+            <div class="flex items-center gap-3 text-sm" style="color:var(--text-mid)">
+              <span class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--gold-pale)">🏠</span>
+              Penitipan Hewan
+            </div>
+            <div class="flex items-center gap-3 text-sm" style="color:var(--text-mid)">
+              <span class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--gold-pale)">💊</span>
+              Praktek Dokter Hewan Setiap Hari
+            </div>
+          </div>
+          <a href="tel:085211322390" class="block w-full text-center py-3 rounded-xl font-bold text-sm transition-all hover:opacity-90" style="background:linear-gradient(135deg,var(--gold),#c8962e);color:var(--purple-deep)">
+            Buat Janji Temu
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ FOOTER ══════════════ -->
+<footer class="py-12 bg-white" style="border-top:1px solid var(--purple-pale)">
+  <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+    <div>
+      <div class="flex items-center justify-center md:justify-start gap-3 mb-3">
+        <div class="w-10 h-10 rounded-lg overflow-hidden border border-purple-100 bg-white flex items-center justify-center shadow-sm">
+          <img 
+            src="https://media-cgk2-1.cdn.whatsapp.net/v/t61.24694-24/437075921_972088971643518_7063574736608123693_n.jpg?ccb=11-4&oh=01_Q5Aa4wEQzMNNJFGs0aCdlpjEQN7ietCFtL2qMG-k10Wkr34bSA&oe=6A35F943&_nc_sid=5e03e0&_nc_cat=101" 
+            alt="Logo Sakti Pet Care"
+            class="w-full h-full object-cover"
+            onerror="this.src='https://via.placeholder.com/100?text=SPC'"
+          />
+        </div>
+        <div>
+          <span class="serif font-bold text-xl" style="color:var(--purple-deep)">Sakti Pet Care</span>
+          <span class="serif italic font-bold" style="color:var(--gold)">· CatSkin AI</span>
+        </div>
+      </div>
+      <p class="text-xs max-w-xs" style="color:var(--text-soft)">
+        Platform deteksi penyakit kulit kucing berbasis ResNet-50. Untuk edukasi dan diagnosis dini — bukan pengganti konsultasi dokter hewan.
+      </p>
+    </div>
+    <div class="text-xs" style="color:var(--text-soft)">
+      <p>© 2026 Sakti Pet Care. All Rights Reserved.</p>
+      <p class="mt-1">Jln. Raya Binong Permai Blok K2 No.11A, Tangerang</p>
+    </div>
+    <div class="flex gap-3">
+      <div class="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 cursor-pointer" style="background:var(--purple-pale)">📱</div>
+      <div class="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 cursor-pointer" style="background:var(--purple-pale)">📸</div>
+    </div>
+  </div>
+</footer>
+
+<!-- ══════════════ SCRIPT ══════════════ -->
+<script>
+  let selectedBlob = null;
+  let stream = null;
+
+  const video         = document.getElementById('video-feed');
+  const analyzeBtn    = document.getElementById('analyze-btn');
+  const previewImg    = document.getElementById('preview-img');
+  const previewBox    = document.getElementById('preview-box');
+  const uploadPlaceholder = document.getElementById('upload-placeholder');
+
+  /* ── Camera ─────────────────────────────── */
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
+      document.getElementById('camera-box').classList.remove('hidden');
+      document.getElementById('dropzone').classList.add('hidden');
+    } catch {
+      alert("Izin kamera ditolak atau tidak tersedia.");
+    }
+  }
+
+  function stopCamera() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    document.getElementById('camera-box').classList.add('hidden');
+    document.getElementById('dropzone').classList.remove('hidden');
+  }
+
+  function capturePhoto() {
+    const canvas = document.createElement('canvas');
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob(blob => {
+      selectedBlob = blob;
+      displayPreview(URL.createObjectURL(blob), "tangkapan_kamera.jpg");
+      stopCamera();
+    }, 'image/jpeg');
+  }
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    selectedBlob = file;
+    displayPreview(URL.createObjectURL(file), file.name);
+  }
+
+  function displayPreview(url, name) {
+    previewImg.src = url;
+    document.getElementById('file-info').textContent = name;
+    uploadPlaceholder.classList.add('hidden');
+    previewBox.classList.remove('hidden');
+    analyzeBtn.disabled = false;
+  }
+
+  /* ── API ─────────────────────────────────── */
+  async function processAnalysis() {
+    if (!selectedBlob) return;
+
+    document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('result-content').classList.add('hidden');
+    document.getElementById('loading-state').classList.remove('hidden');
+    document.getElementById('result-view').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    const fd = new FormData();
+    fd.append('file', selectedBlob, 'image.jpg');
+
+    try {
+      const res  = await fetch('/predict', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error("Gagal menghubungi server AI.");
+      const data = await res.json();
+      renderResult(data);
+    } catch (err) {
+      alert("Error: " + err.message);
+      resetApp();
+    }
+  }
+
+  function renderResult(data) {
+    document.getElementById('res-emoji').textContent       = data.emoji;
+    document.getElementById('res-emoji').style.background = data.color + '22';
+    document.getElementById('res-label').textContent      = data.label;
+    document.getElementById('res-percent').textContent    = data.confidence + '%';
+    document.getElementById('res-confidence-text').textContent = `Keyakinan: ${data.confidence}%`;
+    document.getElementById('res-description').textContent = data.description;
+
+    // Advice
+    document.getElementById('res-advice').innerHTML = data.advice.map(item => `
+      <li class="advice-item">
+        <div class="advice-check">✓</div>
+        <span>${item}</span>
+      </li>
+    `).join('');
+
+    // All probs
+    document.getElementById('res-all-probs').innerHTML = data.all_probs.map(p => `
+      <div class="space-y-1">
+        <div class="flex justify-between text-[11px] font-bold">
+          <span style="color:var(--text-mid)">${p.label}</span>
+          <span style="color:${p.color}">${p.prob}%</span>
+        </div>
+        <div class="mini-bar-track">
+          <div class="mini-bar-fill" style="width:${p.prob}%;background-color:${p.color}"></div>
+        </div>
+      </div>
+    `).join('');
+
+    // Animate bar
+    setTimeout(() => {
+      document.getElementById('res-bar').style.width = data.confidence + '%';
+    }, 100);
+
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('result-content').classList.remove('hidden');
+  }
+
+  function resetApp() {
+    selectedBlob = null;
+    document.getElementById('file-input').value = "";
+    previewBox.classList.add('hidden');
+    uploadPlaceholder.classList.remove('hidden');
+    analyzeBtn.disabled = true;
+    document.getElementById('result-content').classList.add('hidden');
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('empty-state').classList.remove('hidden');
+  }
+
+  /* ── Disease DB Render ───────────────────── */
+  const DISEASE_DB = [
+    {
+      name: 'Flea_Allergy', label: 'Flea Allergy', emoji: '🔴', color: '#f59e0b',
+      desc: 'Alergi terhadap gigitan kutu yang menyebabkan gatal parah, pengelupasan kulit, dan kerontokan bulu.',
+      tags: ['Gatal', 'Kerontokan Bulu', 'Kemerahan']
+    },
+    {
+      name: 'Health', label: 'Sehat', emoji: '✅', color: '#22c55e',
+      desc: 'Kondisi kulit dan bulu kucing dalam keadaan sehat, bersih, dan bebas dari infeksi maupun parasit.',
+      tags: ['Bulu Lebat', 'Kulit Bersih', 'Aktif']
+    },
+    {
+      name: 'Ringworm', label: 'Ringworm', emoji: '🔵', color: '#3b82f6',
+      desc: 'Infeksi jamur Dermatophytosis yang sangat menular, menimbulkan bercak bulat bersisik dan kebotakan.',
+      tags: ['Bercak Bulat', 'Bersisik', 'Menular']
+    },
+    {
+      name: 'Scabies', label: 'Scabies', emoji: '🦠', color: '#a855f7',
+      desc: 'Infeksi tungau Sarcoptes scabiei yang menyebabkan kerak tebal, kerontokan, dan iritasi kulit parah.',
+      tags: ['Kerak', 'Iritasi', 'Parasit']
+    },
+  ];
+
+  document.getElementById('disease-cards').innerHTML = DISEASE_DB.map(d => `
+    <div class="disease-card">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl mb-4" style="background:${d.color}18">
+        ${d.emoji}
+      </div>
+      <h4 class="font-bold text-base mb-1" style="color:var(--purple-deep)">${d.label}</h4>
+      <p class="text-xs leading-relaxed mb-4" style="color:var(--text-soft)">${d.desc}</p>
+      <div class="flex flex-wrap gap-1">
+        ${d.tags.map(t => `<span class="px-2 py-1 rounded-lg text-[10px] font-bold" style="background:${d.color}15;color:${d.color}">${t}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+</script>
+</body>
+</html>

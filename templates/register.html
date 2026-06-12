@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daftar — Sakti Pet Care CatSkin AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --purple-deep:  #2d1b69;
+      --purple-mid:   #4c2fa0;
+      --purple-light: #7c5cbf;
+      --purple-pale:  #ede8f8;
+      --gold:         #d4a843;
+      --gold-light:   #f5e3a3;
+      --gold-pale:    #fdf8ec;
+      --cream:        #faf8f5;
+      --text-dark:    #1a1128;
+      --text-mid:     #4a3f6b;
+      --text-soft:    #8b7fb8;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: 'DM Sans', sans-serif; background-color: var(--cream); color: var(--text-dark); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+
+    .hero-bg {
+      background: linear-gradient(145deg, var(--purple-deep) 0%, #3d2580 40%, var(--purple-mid) 100%);
+    }
+    .hero-bg::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle at 20% 50%, rgba(212,168,67,0.12) 0%, transparent 60%),
+                        radial-gradient(circle at 80% 20%, rgba(124,92,191,0.3) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold) 0%, #c8962e 100%);
+      color: var(--purple-deep); font-weight: 700;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 20px rgba(212,168,67,0.35);
+    }
+    .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 16px 30px rgba(212,168,67,0.5); }
+
+    .card-auth {
+      background: #fff;
+      border: 1px solid rgba(212,168,67,0.15);
+      border-radius: 24px;
+      box-shadow: 0 8px 40px rgba(45,27,105,0.12);
+    }
+    .input-field {
+      width: 100%; padding: 12px 16px;
+      border: 1.5px solid var(--purple-pale);
+      border-radius: 12px; font-size: 14px;
+      color: var(--text-dark); background: #fff;
+      transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+    }
+    .input-field:focus {
+      border-color: var(--purple-mid);
+      box-shadow: 0 0 0 3px rgba(76,47,160,0.1);
+    }
+    .paw-pattern {
+      position: absolute; inset: 0; opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Ctext x='10' y='50' font-size='36' fill='white'%3E🐾%3C/text%3E%3C/svg%3E");
+      background-size: 80px 80px;
+    }
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in { animation: fade-in-up 0.5s ease-out forwards; }
+  </style>
+</head>
+<body>
+
+<div class="min-h-screen flex">
+
+  <!-- ── Left Panel ── -->
+  <div class="hidden lg:flex lg:w-1/2 hero-bg relative items-center justify-center p-12 overflow-hidden">
+    <div class="paw-pattern"></div>
+    <div class="relative z-10 text-center">
+      <div class="text-8xl mb-6">🐾</div>
+      <h1 class="serif text-5xl font-bold text-white mb-4">
+        Bergabung dengan<br/>
+        <span class="italic" style="color:var(--gold)">Sakti Pet Care</span>
+      </h1>
+      <p class="text-lg max-w-sm mx-auto leading-relaxed" style="color:rgba(255,255,255,0.7)">
+        Daftarkan akun Anda dan mulai deteksi penyakit kulit kucing secara gratis dengan teknologi AI.
+      </p>
+      <div class="mt-10 p-6 rounded-2xl" style="background:rgba(255,255,255,0.07);border:1px solid rgba(212,168,67,0.2)">
+        <p class="font-bold text-white mb-3">✨ Fitur yang Anda Dapatkan</p>
+        <ul class="space-y-2 text-sm text-left" style="color:rgba(255,255,255,0.75)">
+          <li class="flex items-center gap-2"><span style="color:var(--gold)">✓</span> Analisis AI tak terbatas</li>
+          <li class="flex items-center gap-2"><span style="color:var(--gold)">✓</span> Riwayat prediksi tersimpan</li>
+          <li class="flex items-center gap-2"><span style="color:var(--gold)">✓</span> Deteksi 4 kondisi kulit kucing</li>
+          <li class="flex items-center gap-2"><span style="color:var(--gold)">✓</span> Saran penanganan dokter hewan</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right Panel ── -->
+  <div class="w-full lg:w-1/2 flex items-center justify-center p-8">
+    <div class="w-full max-w-md animate-fade-in">
+
+      <!-- Mobile logo -->
+      <div class="flex items-center gap-3 mb-8 lg:hidden">
+        <div class="w-12 h-12 rounded-xl overflow-hidden shadow-lg border border-purple-100 bg-white flex items-center justify-center">
+          <img src="https://media-cgk2-1.cdn.whatsapp.net/v/t61.24694-24/437075921_972088971643518_7063574736608123693_n.jpg?ccb=11-4&oh=01_Q5Aa4wEQzMNNJFGs0aCdlpjEQN7ietCFtL2qMG-k10Wkr34bSA&oe=6A35F943&_nc_sid=5e03e0&_nc_cat=101"
+               onerror="this.src='https://via.placeholder.com/100?text=SPC'"
+               class="w-full h-full object-cover" alt="Logo">
+        </div>
+        <div>
+          <span class="serif font-bold text-xl" style="color:var(--purple-deep)">Sakti Pet Care</span>
+          <span class="block text-[10px] font-bold tracking-widest uppercase" style="color:var(--gold)">CatSkin AI</span>
+        </div>
+      </div>
+
+      <div class="card-auth p-8">
+        <div class="mb-6">
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-4"
+               style="background:var(--purple-pale);color:var(--purple-mid)">
+            📝 Buat Akun Baru
+          </div>
+          <h2 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Daftar Gratis</h2>
+          <p class="mt-2 text-sm" style="color:var(--text-soft)">Isi data di bawah untuk membuat akun Anda.</p>
+        </div>
+
+        {% if error %}
+        <div class="mb-4 p-3 rounded-xl text-sm font-semibold flex items-center gap-2"
+             style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca">
+          ⚠️ {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/register" class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold mb-1.5" style="color:var(--text-mid)">Nama Lengkap</label>
+            <input type="text" name="name" required placeholder="Nama Anda" class="input-field">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1.5" style="color:var(--text-mid)">Email</label>
+            <input type="email" name="email" required placeholder="nama@email.com" class="input-field">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1.5" style="color:var(--text-mid)">Password</label>
+            <div class="relative">
+              <input type="password" name="password" id="passInput" required placeholder="Min. 6 karakter" class="input-field pr-12">
+              <button type="button" onclick="togglePass('passInput')" class="absolute right-3 top-1/2 -translate-y-1/2 text-lg" style="color:var(--text-soft)">👁️</button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1.5" style="color:var(--text-mid)">Konfirmasi Password</label>
+            <div class="relative">
+              <input type="password" name="password_confirm" id="passConfirmInput" required placeholder="Ulangi password" class="input-field pr-12">
+              <button type="button" onclick="togglePass('passConfirmInput')" class="absolute right-3 top-1/2 -translate-y-1/2 text-lg" style="color:var(--text-soft)">👁️</button>
+            </div>
+          </div>
+
+          <div class="pt-1">
+            <p class="text-xs" style="color:var(--text-soft)">
+              Dengan mendaftar, Anda menyetujui penggunaan data untuk keperluan layanan Sakti Pet Care.
+            </p>
+          </div>
+
+          <button type="submit" class="btn-gold w-full py-3.5 rounded-xl text-base mt-2">
+            Buat Akun Sekarang
+          </button>
+        </form>
+
+        <div class="mt-5 text-center">
+          <p class="text-sm" style="color:var(--text-soft)">
+            Sudah punya akun?
+            <a href="/login" class="font-bold hover:underline" style="color:var(--purple-mid)">Masuk di sini</a>
+          </p>
+        </div>
+      </div>
+
+      <p class="text-center text-xs mt-6" style="color:var(--text-soft)">
+        © 2026 Sakti Pet Care · Jln. Raya Binong Permai, Tangerang
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  function togglePass(id) {
+    const el = document.getElementById(id);
+    el.type = el.type === 'password' ? 'text' : 'password';
+  }
+</script>
+</body>
+</html>
