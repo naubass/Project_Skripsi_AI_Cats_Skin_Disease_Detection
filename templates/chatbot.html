@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chatbot — Sakti Pet Care CatSkin AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0;
+      --purple-pale: #ede8f8; --gold: #d4a843;
+      --cream: #faf8f5; --text-dark: #1a1128;
+      --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .glass-nav { background: rgba(250,248,245,0.92); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(212,168,67,0.2); }
+    .btn-gold { background: linear-gradient(135deg, var(--gold) 0%, #c8962e 100%); color: var(--purple-deep); font-weight: 700; transition: all 0.3s; box-shadow: 0 8px 20px rgba(212,168,67,0.35); }
+    .btn-gold:hover { transform: translateY(-2px); }
+
+    /* Chat bubble styles */
+    .bubble-user {
+      background: linear-gradient(135deg, var(--purple-mid), var(--purple-deep));
+      color: white; border-radius: 18px 18px 4px 18px;
+      padding: 12px 16px; max-width: 75%; margin-left: auto;
+    }
+    .bubble-bot {
+      background: white; color: var(--text-dark);
+      border: 1px solid rgba(212,168,67,0.2);
+      border-radius: 18px 18px 18px 4px;
+      padding: 12px 16px; max-width: 75%;
+      box-shadow: 0 2px 12px rgba(45,27,105,0.08);
+    }
+    .bubble-source {
+      font-size: 11px; margin-top: 8px; padding: 8px 12px;
+      background: var(--purple-pale); border-radius: 8px;
+      color: var(--text-soft); border-left: 3px solid var(--gold);
+    }
+
+    /* Typing indicator */
+    .typing span {
+      display: inline-block; width: 8px; height: 8px;
+      background: var(--text-soft); border-radius: 50%; margin: 0 2px;
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-8px); }
+    }
+
+    #chat-box { scroll-behavior: smooth; }
+
+    /* Scrollbar */
+    #chat-box::-webkit-scrollbar { width: 4px; }
+    #chat-box::-webkit-scrollbar-thumb { background: var(--purple-pale); border-radius: 4px; }
+
+    @keyframes fade-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    .fade-in { animation: fade-in 0.3s ease-out; }
+
+    /* ── Markdown rendered output ── */
+    .md-body { line-height: 1.7; }
+    .md-body p { margin: 0 0 0.6em 0; }
+    .md-body p:last-child { margin-bottom: 0; }
+    .md-body strong { font-weight: 700; color: var(--purple-deep); }
+    .md-body em { font-style: italic; }
+    .md-body h1,.md-body h2,.md-body h3 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 700; color: var(--purple-deep);
+      margin: 0.9em 0 0.4em;
+    }
+    .md-body h1 { font-size: 1.2em; }
+    .md-body h2 { font-size: 1.1em; }
+    .md-body h3 { font-size: 1em; }
+    .md-body ul,.md-body ol { padding-left: 1.4em; margin: 0.5em 0; }
+    .md-body ul { list-style: none; padding-left: 0; }
+    .md-body ul li { padding-left: 1.4em; position: relative; margin-bottom: 0.35em; }
+    .md-body ul li::before {
+      content: '▸';
+      position: absolute; left: 0;
+      color: var(--gold); font-size: 0.8em; top: 0.15em;
+    }
+    .md-body ol { list-style: decimal; }
+    .md-body ol li { margin-bottom: 0.35em; }
+    .md-body code {
+      background: var(--purple-pale); color: var(--purple-mid);
+      padding: 1px 6px; border-radius: 4px; font-size: 0.85em;
+      font-family: monospace;
+    }
+    .md-body blockquote {
+      border-left: 3px solid var(--gold); margin: 0.6em 0;
+      padding: 6px 12px; background: var(--purple-pale);
+      border-radius: 0 8px 8px 0; color: var(--text-mid);
+      font-style: italic;
+    }
+    .md-body hr { border: none; border-top: 1px solid rgba(212,168,67,0.2); margin: 0.8em 0; }
+
+    /* Dropdown */
+    #nav-dropdown-menu { animation: fade-in 0.18s ease-out; }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="fixed top-0 w-full z-50 glass-nav">
+  <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl overflow-hidden shadow border border-purple-100">
+        <img src="https://media-cgk2-1.cdn.whatsapp.net/v/t61.24694-24/437075921_972088971643518_7063574736608123693_n.jpg?ccb=11-4&oh=01_Q5Aa4wEQzMNNJFGs0aCdlpjEQN7ietCFtL2qMG-k10Wkr34bSA&oe=6A35F943&_nc_sid=5e03e0&_nc_cat=101"
+             onerror="this.src='https://via.placeholder.com/100?text=SPC'"
+             class="w-full h-full object-cover">
+      </div>
+      <div>
+        <span class="serif font-bold text-lg" style="color:var(--purple-deep)">Sakti Pet Care</span>
+        <span class="block text-[10px] font-bold tracking-widest uppercase" style="color:var(--gold)">CatSkin AI</span>
+      </div>
+    </a>
+    <div class="flex items-center gap-3">
+      <!-- User Dropdown -->
+      <div class="relative" id="nav-dropdown-wrapper">
+        <button onclick="toggleNavDropdown()" id="nav-dropdown-btn"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all hover:shadow-md"
+          style="background:var(--purple-pale);color:var(--purple-mid)">
+          <span>👤</span>
+          <span>{{ user.name }}</span>
+          <svg id="nav-chevron" class="w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div id="nav-dropdown-menu"
+          class="hidden absolute right-0 mt-2 w-48 rounded-2xl shadow-xl border overflow-hidden z-50"
+          style="background:white;border-color:rgba(212,168,67,0.2);box-shadow:0 16px 40px rgba(45,27,105,0.15)">
+          <div class="px-4 py-3 border-b" style="border-color:rgba(212,168,67,0.1)">
+            <p class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-soft)">Menu</p>
+          </div>
+          <a href="/"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
+            style="color:var(--text-mid)">
+            <span class="text-base">🔬</span> Analisis
+          </a>
+          <a href="/history"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
+            style="color:var(--text-mid)">
+            <span class="text-base">📋</span> Riwayat
+          </a>
+          <a href="/chatbot"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors bg-purple-50"
+            style="color:var(--purple-mid)">
+            <span class="text-base">🤖</span> <strong>Chatbot</strong>
+          </a>
+          <div class="border-t" style="border-color:rgba(212,168,67,0.1)"></div>
+          <a href="/logout"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-red-50"
+            style="color:#e05252">
+            <span class="text-base">🚪</span> Logout
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="pt-24 pb-6 px-4 h-screen flex flex-col max-w-4xl mx-auto">
+
+  <!-- Header -->
+  <div class="mb-4 text-center">
+    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-2"
+         style="background:var(--purple-pale);color:var(--purple-mid)">
+      🤖 RAG Chatbot
+    </div>
+    <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Tanya Dokter Virtual</h1>
+    <p class="text-sm mt-1" style="color:var(--text-soft)">Tanya apa saja seputar kesehatan kulit kucing</p>
+  </div>
+
+  <!-- Chat Container -->
+  <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-lg border overflow-hidden"
+       style="border-color:rgba(212,168,67,0.15)">
+
+    <!-- Chat Box -->
+    <div id="chat-box" class="flex-1 overflow-y-auto p-6 space-y-4">
+
+      <!-- Pesan selamat datang dari bot -->
+      <div class="flex items-start gap-3 fade-in">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+             style="background:var(--purple-pale)">🐱</div>
+        <div>
+          <div class="bubble-bot">
+            Halo <strong>{{ user.name }}</strong>! 👋 Saya asisten virtual Sakti Pet Care.<br/><br/>
+            Saya bisa membantu menjawab pertanyaan seputar:
+            <ul class="mt-2 space-y-1 text-sm" style="color:var(--text-mid)">
+              <li>🔴 Flea Allergy — gejala dan penanganan</li>
+              <li>🔵 Ringworm — pencegahan dan pengobatan</li>
+              <li>🦠 Scabies — penyebab dan obat</li>
+              <li>✅ Perawatan kucing sehat sehari-hari</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Suggested questions -->
+    <div id="suggestions" class="px-6 py-3 flex gap-2 flex-wrap border-t" style="border-color:rgba(212,168,67,0.1)">
+      <span class="text-xs font-semibold mr-1" style="color:var(--text-soft)">Coba tanya:</span>
+      <button onclick="sendSuggestion(this)" class="text-xs px-3 py-1.5 rounded-full border hover:border-purple-400 transition-colors" style="color:var(--purple-mid);border-color:var(--purple-pale)">
+        Apa gejala ringworm?
+      </button>
+      <button onclick="sendSuggestion(this)" class="text-xs px-3 py-1.5 rounded-full border hover:border-purple-400 transition-colors" style="color:var(--purple-mid);border-color:var(--purple-pale)">
+        Cara mengobati scabies pada kucing?
+      </button>
+      <button onclick="sendSuggestion(this)" class="text-xs px-3 py-1.5 rounded-full border hover:border-purple-400 transition-colors" style="color:var(--purple-mid);border-color:var(--purple-pale)">
+        Apakah ringworm menular ke manusia?
+      </button>
+    </div>
+
+    <!-- Input Box -->
+    <div class="p-4 border-t" style="border-color:rgba(212,168,67,0.15)">
+      <div class="flex gap-3 items-end">
+        <textarea id="user-input" rows="1"
+          placeholder="Tulis pertanyaanmu di sini..."
+          class="flex-1 resize-none rounded-xl px-4 py-3 text-sm outline-none border transition-all"
+          style="border-color:var(--purple-pale);color:var(--text-dark);max-height:120px"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"></textarea>
+        <button onclick="sendMessage()" id="send-btn"
+          class="btn-gold px-5 py-3 rounded-xl text-sm flex-shrink-0">
+          Kirim ➤
+        </button>
+      </div>
+      <p class="text-xs mt-2 text-center" style="color:var(--text-soft)">
+        ⚠️ Jawaban AI bukan pengganti diagnosis dokter hewan profesional.
+      </p>
+    </div>
+  </div>
+
+  <!-- Admin PDF Upload (hanya tampil jika role admin) -->
+  {% if user.role == 'admin' %}
+  <div class="mt-4 p-4 rounded-xl border" style="background:#fdf8ec;border-color:rgba(212,168,67,0.3)">
+    <p class="text-sm font-bold mb-2" style="color:var(--purple-deep)">📄 Admin: Upload PDF Knowledge Base</p>
+    <div class="flex gap-3 items-center">
+      <input type="file" id="pdf-input" accept=".pdf" class="text-sm flex-1">
+      <button onclick="uploadPDF()" class="btn-gold px-4 py-2 rounded-lg text-sm">Upload</button>
+    </div>
+    <p id="upload-status" class="text-xs mt-2" style="color:var(--text-soft)"></p>
+  </div>
+  {% endif %}
+
+</main>
+
+<script>
+  const chatBox = document.getElementById('chat-box');
+
+  // ── Navbar dropdown ───────────────────────────────────────────────────────
+  function toggleNavDropdown() {
+    const menu = document.getElementById('nav-dropdown-menu');
+    const chevron = document.getElementById('nav-chevron');
+    const isHidden = menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', !isHidden);
+    chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
+  }
+  function closeNavDropdown() {
+    const menu = document.getElementById('nav-dropdown-menu');
+    if (menu) menu.classList.add('hidden');
+    const chevron = document.getElementById('nav-chevron');
+    if (chevron) chevron.style.transform = '';
+  }
+  document.addEventListener('click', function(e) {
+    const wrapper = document.getElementById('nav-dropdown-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) closeNavDropdown();
+  });
+
+  // ── Lightweight Markdown → HTML renderer ─────────────────────────────────
+  function renderMarkdown(text) {
+    // Escape HTML first, then selectively re-allow our markdown tags
+    let s = text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Headings
+    s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    s = s.replace(/^## (.+)$/gm,  '<h2>$1</h2>');
+    s = s.replace(/^# (.+)$/gm,   '<h1>$1</h1>');
+
+    // Horizontal rule
+    s = s.replace(/^---+$/gm, '<hr>');
+
+    // Bold & italic
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
+    s = s.replace(/\*(.+?)\*/g,         '<em>$1</em>');
+
+    // Inline code
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Blockquote
+    s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+    // Numbered list
+    s = s.replace(/((?:^\d+\. .+\n?)+)/gm, function(block) {
+      const items = block.trim().split('\n')
+        .map(l => '<li>' + l.replace(/^\d+\. /, '') + '</li>').join('');
+      return '<ol>' + items + '</ol>';
+    });
+
+    // Unordered list (- or *)
+    s = s.replace(/((?:^[-*] .+\n?)+)/gm, function(block) {
+      const items = block.trim().split('\n')
+        .map(l => '<li>' + l.replace(/^[-*] /, '') + '</li>').join('');
+      return '<ul>' + items + '</ul>';
+    });
+
+    // Paragraphs — wrap remaining lines
+    s = s.split('\n').map(line => {
+      line = line.trim();
+      if (!line) return '';
+      if (/^<(h[1-3]|ul|ol|li|blockquote|hr)/.test(line)) return line;
+      return '<p>' + line + '</p>';
+    }).join('\n');
+
+    return s;
+  }
+
+  // ── Auto resize textarea ──────────────────────────────────────────────────
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  // ── Enter = kirim, Shift+Enter = newline ──────────────────────────────────
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  // ── Append bubble ke chat ─────────────────────────────────────────────────
+  function appendBubble(type, content, sources = []) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex items-start gap-3 fade-in';
+
+    if (type === 'user') {
+      const escaped = content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      wrapper.innerHTML = `
+        <div class="flex-1"></div>
+        <div class="bubble-user text-sm">${escaped}</div>
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+             style="background:var(--purple-pale)">👤</div>`;
+    } else {
+      let sourcesHtml = '';
+      if (sources && sources.length > 0) {
+        const srcText = sources[0].substring(0, 150).replace(/</g,'&lt;');
+        sourcesHtml = `<div class="bubble-source">
+          <strong>📚 Sumber:</strong><br/>${srcText}…
+        </div>`;
+      }
+      const mdHtml = renderMarkdown(content);
+      wrapper.innerHTML = `
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+             style="background:var(--purple-pale)">🐱</div>
+        <div>
+          <div class="bubble-bot text-sm md-body">${mdHtml}</div>
+          ${sourcesHtml}
+        </div>`;
+    }
+
+    chatBox.appendChild(wrapper);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return wrapper;
+  }
+
+  // ── Typing indicator ──────────────────────────────────────────────────────
+  function showTyping() {
+    const wrapper = document.createElement('div');
+    wrapper.id = 'typing-indicator';
+    wrapper.className = 'flex items-start gap-3 fade-in';
+    wrapper.innerHTML = `
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+           style="background:var(--purple-pale)">🐱</div>
+      <div class="bubble-bot typing">
+        <span></span><span></span><span></span>
+      </div>`;
+    chatBox.appendChild(wrapper);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function hideTyping() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+  }
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  async function sendMessage() {
+    const input = document.getElementById('user-input');
+    const query = input.value.trim();
+    if (!query) return;
+
+    document.getElementById('suggestions').style.display = 'none';
+    appendBubble('user', query);
+    input.value = '';
+    input.style.height = 'auto';
+
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.disabled = true;
+    sendBtn.textContent = '...';
+
+    showTyping();
+
+    try {
+      const res = await fetch('/chatbot/ask', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query})
+      });
+
+      const data = await res.json();
+      hideTyping();
+
+      if (res.ok) {
+        appendBubble('bot', data.answer, data.sources);
+      } else {
+        appendBubble('bot', '⚠️ ' + (data.detail || 'Terjadi kesalahan.'));
+      }
+    } catch (err) {
+      hideTyping();
+      appendBubble('bot', '⚠️ Gagal terhubung ke server. Coba lagi.');
+    }
+
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Kirim ➤';
+  }
+
+  // ── Suggested question ────────────────────────────────────────────────────
+  function sendSuggestion(btn) {
+    document.getElementById('user-input').value = btn.textContent.trim();
+    sendMessage();
+  }
+
+  // ── Admin PDF upload ──────────────────────────────────────────────────────
+  async function uploadPDF() {
+    const input = document.getElementById('pdf-input');
+    const status = document.getElementById('upload-status');
+    if (!input.files[0]) { status.textContent = 'Pilih file PDF dulu.'; return; }
+
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    status.textContent = '⏳ Mengupload dan membangun index...';
+
+    try {
+      const res = await fetch('/admin/upload-pdf', {method: 'POST', body: formData});
+      const data = await res.json();
+      status.textContent = res.ok ? '✅ ' + data.message : '❌ ' + data.detail;
+    } catch {
+      status.textContent = '❌ Gagal upload.';
+    }
+  }
+</script>
+</body>
+</html>

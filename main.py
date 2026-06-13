@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from datetime import datetime
 from database import get_db, init_db
 from auth import hash_password, verify_password
+from rag import ask as rag_ask, build_index, load_index
 
 app = FastAPI(title="Sakti Pet Care - CatSkin AI | Klasifikasi Penyakit Kulit Kucing")
 
@@ -230,6 +231,60 @@ async def history_page(request: Request):
         cursor.close()
         db.close()
     return templates.TemplateResponse("history.html", {"request": request, "user": user, "records": records})
+
+
+# ══ CHATBOT ROUTES ═════════════════════════════════════════════════════════════
+
+@app.get("/chatbot", response_class=HTMLResponse)
+async def chatbot_page(request: Request):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse("chatbot.html", {"request": request, "user": user})
+
+
+@app.post("/chatbot/ask")
+async def chatbot_ask(request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Login diperlukan.")
+    
+    body = await request.json()
+    query = body.get("query", "").strip()
+    
+    if not query:
+        raise HTTPException(status_code=400, detail="Pertanyaan tidak boleh kosong.")
+    if len(query) > 500:
+        raise HTTPException(status_code=400, detail="Pertanyaan terlalu panjang.")
+    
+    # Panggil RAG
+    result = rag_ask(query)
+    return JSONResponse(result)
+
+
+@app.post("/admin/upload-pdf")
+async def upload_pdf(request: Request, file: UploadFile = File(...)):
+    """Endpoint khusus admin untuk upload PDF knowledge base."""
+    user = get_current_user(request)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Hanya admin yang bisa upload PDF.")
+    
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="File harus berformat PDF.")
+    
+    import os
+    from pathlib import Path
+    Path("rag_data/pdfs").mkdir(parents=True, exist_ok=True)
+    
+    save_path = f"rag_data/pdfs/{file.filename}"
+    contents = await file.read()
+    with open(save_path, "wb") as f:
+        f.write(contents)
+    
+    # Rebuild index setelah upload PDF baru
+    build_index()
+    
+    return JSONResponse({"message": f"PDF '{file.filename}' berhasil diupload dan index diperbarui."})
 
 if __name__ == "__main__":
     import uvicorn

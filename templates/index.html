@@ -258,6 +258,8 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--purple-pale); }
     ::-webkit-scrollbar-thumb { background: var(--purple-light); border-radius: 3px; }
+    @keyframes dd-fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    #nav-dropdown-menu { animation: dd-fade 0.18s ease-out; }
   </style>
 </head>
 <body>
@@ -280,24 +282,76 @@
       </div>
     </a>
     <div class="hidden md:flex items-center gap-8">
-      <a href="#hero"     class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Beranda</a>
-      <a href="#analyze"  class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Analisis</a>
-      <a href="#diseases" class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Penyakit</a>
-      <a href="#clinic"   class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Klinik</a>
-      <a href="/history"  class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Riwayat</a>
+      <a href="#hero"    class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Beranda</a>
+      <a href="#analyze" class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Analisis</a>
+      <a href="/chatbot" class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">Chatbot</a>
+      <a href="/history" class="text-sm font-semibold hover:text-purple-700 transition-colors" style="color:var(--text-mid)">History</a>
     </div>
     <div class="flex items-center gap-3">
       {% if user %}
-      <a href="/logout" class="hidden md:inline text-sm font-semibold hover:text-red-600 transition-colors" style="color:var(--text-soft)">Logout</a>
-      <span class="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold"
-            style="background:var(--purple-pale);color:var(--purple-mid)">
-        👤 {{ user.name }}
-      </span>
+      <!-- User Dropdown -->
+      <div class="relative" id="nav-dropdown-wrapper">
+        <button onclick="toggleNavDropdown()" id="nav-dropdown-btn"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all hover:shadow-md"
+          style="background:var(--purple-pale);color:var(--purple-mid)">
+          <span>👤</span>
+          <span>{{ user.name }}</span>
+          <svg id="nav-chevron" class="w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <!-- Dropdown menu -->
+        <div id="nav-dropdown-menu"
+          class="hidden absolute right-0 mt-2 w-48 rounded-2xl shadow-xl border overflow-hidden z-50"
+          style="background:white;border-color:rgba(212,168,67,0.2);box-shadow:0 16px 40px rgba(45,27,105,0.15)">
+          <div class="px-4 py-3 border-b" style="border-color:rgba(212,168,67,0.1)">
+            <p class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-soft)">Menu</p>
+          </div>
+          <a href="#analyze" onclick="closeNavDropdown()"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
+            style="color:var(--text-mid)">
+            <span class="text-base">🔬</span> Analisis
+          </a>
+          <a href="/history"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
+            style="color:var(--text-mid)">
+            <span class="text-base">📋</span> Riwayat
+          </a>
+          <a href="/chatbot"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
+            style="color:var(--text-mid)">
+            <span class="text-base">🤖</span> Chatbot
+          </a>
+          <div class="border-t" style="border-color:rgba(212,168,67,0.1)"></div>
+          <a href="/logout"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-red-50"
+            style="color:#e05252">
+            <span class="text-base">🚪</span> Logout
+          </a>
+        </div>
+      </div>
       {% endif %}
       <a href="#analyze" class="btn-gold px-6 py-2.5 rounded-full text-sm">🔬 Mulai Cek</a>
     </div>
   </div>
 </nav>
+<script>
+  function toggleNavDropdown() {
+    const menu = document.getElementById('nav-dropdown-menu');
+    const chevron = document.getElementById('nav-chevron');
+    const isHidden = menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', !isHidden);
+    chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
+  }
+  function closeNavDropdown() {
+    document.getElementById('nav-dropdown-menu').classList.add('hidden');
+    document.getElementById('nav-chevron').style.transform = '';
+  }
+  document.addEventListener('click', function(e) {
+    const wrapper = document.getElementById('nav-dropdown-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) closeNavDropdown();
+  });
+</script>
 
 <!-- ══════════════ HERO ══════════════ -->
 <section id="hero" class="hero-bg pt-32 pb-20 px-6">
