@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Riwayat Prediksi — Sakti Pet Care CatSkin AI</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -13,25 +14,154 @@
       --purple-light: #7c5cbf;
       --purple-pale:  #ede8f8;
       --gold:         #d4a843;
+      --gold-light:   #f5e3a3;
       --gold-pale:    #fdf8ec;
       --cream:        #faf8f5;
       --text-dark:    #1a1128;
       --text-mid:     #4a3f6b;
       --text-soft:    #8b7fb8;
     }
+
     * { box-sizing: border-box; }
-    body { font-family: 'DM Sans', sans-serif; background-color: var(--cream); color: var(--text-dark); }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background-color: var(--cream);
+      color: var(--text-dark);
+      overflow-x: hidden;
+    }
+
     .serif { font-family: 'Cormorant Garamond', serif; }
-    .glass-nav { background: rgba(250,248,245,0.92); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(212,168,67,0.2); }
-    .btn-gold { background: linear-gradient(135deg, var(--gold) 0%, #c8962e 100%); color: var(--purple-deep); font-weight: 700; transition: all 0.3s; box-shadow: 0 8px 20px rgba(212,168,67,0.35); }
-    .btn-gold:hover { transform: translateY(-2px); }
-    .card-hist { background: #fff; border: 1px solid rgba(212,168,67,0.15); border-radius: 16px; padding: 20px; transition: all 0.2s; }
-    .card-hist:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(45,27,105,0.1); border-color: var(--gold); }
-    .badge-conf { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; }
-    @keyframes fade-in-up { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-    .animate-fade-in { animation: fade-in-up 0.4s ease-out forwards; }
-    @keyframes fade-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-    #nav-dropdown-menu { animation: fade-in 0.18s ease-out; }
+
+    /* ── Nav ── */
+    .glass-nav {
+      background: rgba(250,248,245,0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(212,168,67,0.2);
+    }
+
+    /* ── Buttons ── */
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold) 0%, #c8962e 100%);
+      color: var(--purple-deep);
+      font-weight: 700;
+      transition: all 0.3s;
+      box-shadow: 0 8px 20px rgba(212,168,67,0.35);
+    }
+    .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(212,168,67,0.45); }
+
+    /* ── Stat card ── */
+    .stat-card {
+      background: #fff;
+      border: 1px solid rgba(212,168,67,0.15);
+      border-radius: 20px;
+      padding: 22px 24px;
+      box-shadow: 0 4px 20px rgba(45,27,105,0.05);
+      transition: all 0.25s;
+    }
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(45,27,105,0.10);
+      border-color: rgba(212,168,67,0.35);
+    }
+
+    /* ── Chart card ── */
+    .chart-card {
+      background: #fff;
+      border: 1px solid rgba(212,168,67,0.15);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(45,27,105,0.05);
+    }
+
+    /* ── History card ── */
+    .card-hist {
+      background: #fff;
+      border: 1px solid rgba(212,168,67,0.12);
+      border-radius: 16px;
+      padding: 18px 20px;
+      transition: all 0.22s;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .card-hist:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(45,27,105,0.10);
+      border-color: var(--gold);
+    }
+
+    .badge-conf {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* ── Section label ── */
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: var(--purple-pale);
+      color: var(--purple-mid);
+    }
+
+    /* ── Divider ── */
+    .gold-divider {
+      width: 48px;
+      height: 3px;
+      background: linear-gradient(90deg, var(--gold), transparent);
+      border-radius: 2px;
+      margin: 10px 0 0;
+    }
+
+    /* ── Animations ── */
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .afu { animation: fade-in-up 0.45s ease-out forwards; }
+    .afu-d1 { animation-delay: 0.05s; opacity: 0; }
+    .afu-d2 { animation-delay: 0.12s; opacity: 0; }
+    .afu-d3 { animation-delay: 0.20s; opacity: 0; }
+    .afu-d4 { animation-delay: 0.28s; opacity: 0; }
+
+    @keyframes dd-fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    #nav-dropdown-menu { animation: dd-fade 0.18s ease-out; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--purple-pale); }
+    ::-webkit-scrollbar-thumb { background: var(--purple-light); border-radius: 3px; }
+
+    /* ── Hero strip ── */
+    .hero-strip {
+      background: linear-gradient(135deg, var(--purple-deep) 0%, #3d2580 60%, var(--purple-mid) 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-strip::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle at 10% 50%, rgba(212,168,67,0.10) 0%, transparent 55%),
+                        radial-gradient(circle at 90% 20%, rgba(124,92,191,0.25) 0%, transparent 50%);
+    }
+    .paw-bg {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Ctext x='6' y='40' font-size='28' fill='white'%3E🐾%3C/text%3E%3C/svg%3E");
+      background-size: 60px 60px;
+    }
   </style>
 </head>
 <body>
@@ -40,10 +170,10 @@
 <nav class="fixed top-0 w-full z-50 glass-nav">
   <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
     <a href="/" class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl overflow-hidden shadow-lg border border-purple-100 bg-white flex items-center justify-center">
+      <div class="w-10 h-10 rounded-xl overflow-hidden shadow border border-purple-100">
         <img src="https://media-cgk2-1.cdn.whatsapp.net/v/t61.24694-24/437075921_972088971643518_7063574736608123693_n.jpg?ccb=11-4&oh=01_Q5Aa4wEQzMNNJFGs0aCdlpjEQN7ietCFtL2qMG-k10Wkr34bSA&oe=6A35F943&_nc_sid=5e03e0&_nc_cat=101"
              onerror="this.src='https://via.placeholder.com/100?text=SPC'"
-             class="w-full h-full object-cover" alt="Logo">
+             class="w-full h-full object-cover">
       </div>
       <div>
         <span class="serif font-bold text-lg" style="color:var(--purple-deep)">Sakti Pet Care</span>
@@ -54,10 +184,10 @@
       <!-- User Dropdown -->
       <div class="relative" id="nav-dropdown-wrapper">
         <button onclick="toggleNavDropdown()" id="nav-dropdown-btn"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all hover:shadow-md"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all hover:shadow-md max-w-[120px] md:max-w-none"
           style="background:var(--purple-pale);color:var(--purple-mid)">
           <span>👤</span>
-          <span>{{ user.name }}</span>
+          <span class="truncate">{{ user.name }}</span>
           <svg id="nav-chevron" class="w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
           </svg>
@@ -74,14 +204,14 @@
             <span class="text-base">🔬</span> Analisis
           </a>
           <a href="/history"
-            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors bg-purple-50"
-            style="color:var(--purple-mid)">
-            <span class="text-base">📋</span> <strong>Riwayat</strong>
-          </a>
-          <a href="/chatbot"
             class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
             style="color:var(--text-mid)">
-            <span class="text-base">🤖</span> Chatbot
+            <span class="text-base">📋</span> Riwayat
+          </a>
+          <a href="/chatbot"
+            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors bg-purple-50"
+            style="color:var(--purple-mid)">
+            <span class="text-base">🤖</span> <strong>Chatbot</strong>
           </a>
           <div class="border-t" style="border-color:rgba(212,168,67,0.1)"></div>
           <a href="/logout"
@@ -95,81 +225,400 @@
   </div>
 </nav>
 
-<!-- CONTENT -->
-<main class="pt-28 pb-20 px-6">
-  <div class="max-w-5xl mx-auto">
 
-    <!-- Header -->
-    <div class="mb-10 animate-fade-in">
-      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-4"
-           style="background:var(--purple-pale);color:var(--purple-mid)">
-        📋 Riwayat Analisis
-      </div>
-      <h1 class="serif text-4xl font-bold" style="color:var(--purple-deep)">Riwayat Prediksi Saya</h1>
-      <p class="mt-2 text-sm" style="color:var(--text-soft)">{{ records|length }} prediksi terakhir oleh <strong>{{ user.name }}</strong></p>
+<!-- ══════════════════════════════════════════════
+     HERO STRIP
+══════════════════════════════════════════════ -->
+<div class="hero-strip pt-32 pb-14 px-6">
+  <div class="paw-bg"></div>
+  <div class="max-w-7xl mx-auto relative z-10">
+    <div class="afu">
+      <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4"
+            style="background:rgba(212,168,67,0.18);color:var(--gold)">
+        <span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse inline-block"></span>
+        Riwayat Analisis
+      </span>
+      <h1 class="serif text-4xl md:text-5xl font-bold text-white mb-2">
+        Dashboard <span class="italic" style="color:var(--gold)">Prediksi Saya</span>
+      </h1>
+      <p class="text-sm" style="color:rgba(255,255,255,0.6)">
+        Pantau semua hasil diagnosis kulit kucing Anda secara visual dan terstruktur.
+      </p>
     </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════
+     MAIN CONTENT
+══════════════════════════════════════════════ -->
+<main class="pb-24 px-6 -mt-6">
+  <div class="max-w-7xl mx-auto">
 
     {% if records %}
-    <div class="space-y-4 animate-fade-in">
-      {% for r in records %}
-      <div class="card-hist flex items-center gap-5">
-        <!-- Emoji badge -->
-        <div class="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
-             style="background:{{ r.color }}18">
-          {{ r.emoji }}
-        </div>
-        <!-- Info -->
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-3 flex-wrap mb-1">
-            <span class="font-bold text-base" style="color:var(--purple-deep)">{{ r.label }}</span>
-            <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">
-              {{ r.confidence }}% yakin
-            </span>
+
+    <!-- ── Stat Summary Row ── -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 afu afu-d1">
+
+      <!-- Total -->
+      <div class="stat-card">
+        <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Total Analisis</p>
+        <p class="serif text-4xl font-bold" style="color:var(--purple-deep)">{{ records|length }}</p>
+        <p class="text-xs mt-1" style="color:var(--text-soft)">prediksi dilakukan</p>
+      </div>
+
+      <!-- Avg confidence — dihitung JS -->
+      <div class="stat-card">
+        <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Rata-rata Confidence</p>
+        <p class="serif text-4xl font-bold" style="color:var(--purple-mid)" id="stat-avg">—</p>
+        <p class="text-xs mt-1" style="color:var(--text-soft)">tingkat keyakinan AI</p>
+      </div>
+
+      <!-- Kondisi terbanyak — JS -->
+      <div class="stat-card">
+        <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Kondisi Terbanyak</p>
+        <p class="serif text-2xl font-bold leading-tight" style="color:var(--purple-deep)" id="stat-top-label">—</p>
+        <p class="text-xs mt-1" style="color:var(--text-soft)" id="stat-top-count"></p>
+      </div>
+
+      <!-- Analisis terbaru -->
+      <div class="stat-card">
+        <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Analisis Terbaru</p>
+        <p class="serif text-xl font-bold leading-tight" style="color:var(--purple-deep)">
+          {{ records[0].created_at.strftime('%d %b') if records[0].created_at else '—' }}
+        </p>
+        <p class="text-xs mt-1" style="color:var(--text-soft)">
+          {{ records[0].created_at.strftime('%H:%M WIB') if records[0].created_at else '' }}
+        </p>
+      </div>
+
+    </div>
+
+
+    <!-- ── Charts Row ── -->
+    <div class="grid md:grid-cols-3 gap-5 mb-8 afu afu-d2">
+
+      <!-- Donut: Distribusi Kondisi -->
+      <div class="chart-card flex flex-col">
+        <span class="eyebrow mb-3">📊 Distribusi</span>
+        <p class="serif text-xl font-bold mb-4" style="color:var(--purple-deep)">Breakdown Kondisi</p>
+        <div class="flex items-center gap-6 flex-1">
+          <div class="relative w-36 h-36 flex-shrink-0">
+            <canvas id="chartDonut"></canvas>
+            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <p class="serif text-2xl font-black" style="color:var(--purple-deep)">{{ records|length }}</p>
+              <p class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--text-soft)">Total</p>
+            </div>
           </div>
-          <p class="text-xs truncate" style="color:var(--text-soft)">{{ r.description }}</p>
-        </div>
-        <!-- Tanggal -->
-        <div class="text-right flex-shrink-0">
-          <p class="text-xs font-semibold" style="color:var(--text-mid)">
-            {{ r.created_at.strftime('%d %b %Y') if r.created_at else '-' }}
-          </p>
-          <p class="text-xs" style="color:var(--text-soft)">
-            {{ r.created_at.strftime('%H:%M') if r.created_at else '' }}
-          </p>
+          <div id="donut-legend" class="flex-1 space-y-2 min-w-0"></div>
         </div>
       </div>
-      {% endfor %}
+
+      <!-- Line: Tren Confidence -->
+      <div class="chart-card md:col-span-2 flex flex-col">
+        <span class="eyebrow mb-3">📈 Tren Waktu</span>
+        <p class="serif text-xl font-bold mb-4" style="color:var(--purple-deep)">Confidence per Sesi Analisis</p>
+        <div class="flex-1" style="min-height:160px">
+          <canvas id="chartLine"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- Bar: Frekuensi full width -->
+    <div class="chart-card mb-8 afu afu-d3">
+      <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
+        <div>
+          <span class="eyebrow">🏆 Frekuensi</span>
+          <p class="serif text-xl font-bold mt-2" style="color:var(--purple-deep)">Kondisi Paling Sering Terdeteksi</p>
+        </div>
+        <p class="text-xs" style="color:var(--text-soft)">Berdasarkan {{ records|length }} analisis</p>
+      </div>
+      <div style="height:180px">
+        <canvas id="chartBar"></canvas>
+      </div>
+    </div>
+
+
+    <!-- ── History List ── -->
+    <div class="afu afu-d4">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <span class="eyebrow">📋 Log</span>
+          <p class="serif text-2xl font-bold mt-2" style="color:var(--purple-deep)">Semua Riwayat Prediksi</p>
+          <div class="gold-divider"></div>
+        </div>
+        <p class="text-xs" style="color:var(--text-soft)">oleh <strong>{{ user.name }}</strong></p>
+      </div>
+
+      <div class="space-y-3">
+        {% for r in records %}
+        <div class="card-hist">
+          <!-- No -->
+          <span class="text-xs font-black w-6 text-center flex-shrink-0" style="color:var(--text-soft)">{{ loop.index }}</span>
+
+          <!-- Emoji badge -->
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+               style="background:{{ r.color }}18">
+            {{ r.emoji }}
+          </div>
+
+          <!-- Info -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap mb-0.5">
+              <span class="font-bold text-sm" style="color:var(--purple-deep)">{{ r.label }}</span>
+              <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">
+                {{ r.confidence }}% yakin
+              </span>
+            </div>
+            <p class="text-xs truncate" style="color:var(--text-soft)">{{ r.description }}</p>
+          </div>
+
+          <!-- Confidence mini bar (desktop only) -->
+          <div class="hidden md:block w-28 flex-shrink-0">
+            <div class="h-1.5 rounded-full overflow-hidden" style="background:var(--purple-pale)">
+              <div class="h-full rounded-full" style="width:{{ r.confidence }}%;background:{{ r.color }}"></div>
+            </div>
+            <p class="text-[10px] mt-1 text-right font-semibold" style="color:var(--text-soft)">{{ r.confidence }}%</p>
+          </div>
+
+          <!-- Date -->
+          <div class="text-right flex-shrink-0">
+            <p class="text-xs font-semibold" style="color:var(--text-mid)">
+              {{ r.created_at.strftime('%d %b %Y') if r.created_at else '-' }}
+            </p>
+            <p class="text-[10px]" style="color:var(--text-soft)">
+              {{ r.created_at.strftime('%H:%M') if r.created_at else '' }}
+            </p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
 
     {% else %}
-    <div class="text-center py-24 animate-fade-in">
-      <div class="w-20 h-20 rounded-full flex items-center justify-center text-4xl mx-auto mb-5"
+
+    <!-- Empty State -->
+    <div class="text-center py-32 afu">
+      <div class="w-24 h-24 rounded-full flex items-center justify-center text-5xl mx-auto mb-6"
            style="background:var(--purple-pale)">📭</div>
-      <h3 class="text-xl font-bold mb-2" style="color:var(--purple-deep)">Belum Ada Riwayat</h3>
-      <p class="text-sm mb-8" style="color:var(--text-soft)">Mulai analisis pertama Anda!</p>
-      <a href="/#analyze" class="btn-gold px-8 py-3 rounded-xl inline-block">🔬 Mulai Analisis</a>
+      <h3 class="serif text-2xl font-bold mb-2" style="color:var(--purple-deep)">Belum Ada Riwayat</h3>
+      <p class="text-sm mb-8 max-w-xs mx-auto" style="color:var(--text-soft)">
+        Mulai analisis pertama Anda dan hasilnya akan tersimpan di sini secara otomatis.
+      </p>
+      <a href="/#analyze" class="btn-gold px-8 py-3.5 rounded-2xl inline-block text-sm">🔬 Mulai Analisis Pertama</a>
     </div>
+
     {% endif %}
 
   </div>
 </main>
 
 
+<!-- ══════════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════════ -->
 <script>
-  function toggleNavDropdown() {
-    const menu = document.getElementById('nav-dropdown-menu');
-    const chevron = document.getElementById('nav-chevron');
-    const isHidden = menu.classList.contains('hidden');
-    menu.classList.toggle('hidden', !isHidden);
-    chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
+/* ── Dropdown ── */
+function toggleNavDropdown() {
+  const menu    = document.getElementById('nav-dropdown-menu');
+  const chevron = document.getElementById('nav-chevron');
+  const hidden  = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !hidden);
+  chevron.style.transform = hidden ? 'rotate(180deg)' : '';
+}
+document.addEventListener('click', e => {
+  const w = document.getElementById('nav-dropdown-wrapper');
+  if (w && !w.contains(e.target)) {
+    document.getElementById('nav-dropdown-menu').classList.add('hidden');
+    document.getElementById('nav-chevron').style.transform = '';
   }
-  document.addEventListener('click', function(e) {
-    const wrapper = document.getElementById('nav-dropdown-wrapper');
-    if (wrapper && !wrapper.contains(e.target)) {
-      document.getElementById('nav-dropdown-menu').classList.add('hidden');
-      document.getElementById('nav-chevron').style.transform = '';
-    }
-  });
+});
 </script>
+
+{% if records %}
+<script>
+/* ══════════════════════════════════════════════
+   DATA DARI JINJA2
+══════════════════════════════════════════════ */
+const RAW = [
+  {% for r in records %}
+  {
+    label:      "{{ r.label }}",
+    confidence: {{ r.confidence }},
+    color:      "{{ r.color }}",
+    emoji:      "{{ r.emoji }}",
+    date:       "{{ r.created_at.strftime('%d/%m %H:%M') if r.created_at else '-' }}"
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+/* ══════════════════════════════════════════════
+   STAT CARDS (JS)
+══════════════════════════════════════════════ */
+// Avg confidence
+const avg = (RAW.reduce((s, r) => s + r.confidence, 0) / RAW.length).toFixed(1);
+document.getElementById('stat-avg').textContent = avg + '%';
+
+// Top condition
+const freq = {};
+RAW.forEach(r => {
+  if (!freq[r.label]) freq[r.label] = { count: 0, color: r.color, emoji: r.emoji };
+  freq[r.label].count++;
+});
+const topKey = Object.keys(freq).sort((a, b) => freq[b].count - freq[a].count)[0];
+document.getElementById('stat-top-label').textContent = freq[topKey].emoji + ' ' + topKey;
+document.getElementById('stat-top-count').textContent = freq[topKey].count + '× terdeteksi';
+
+/* ══════════════════════════════════════════════
+   CHART DEFAULTS
+══════════════════════════════════════════════ */
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.color       = '#8b7fb8';
+
+const freqLabels = Object.keys(freq);
+const freqCounts = freqLabels.map(k => freq[k].count);
+const freqColors = freqLabels.map(k => freq[k].color);
+const freqEmojis = freqLabels.map(k => freq[k].emoji);
+
+/* ══════════════════════════════════════════════
+   1. DONUT — Distribusi Kondisi
+══════════════════════════════════════════════ */
+new Chart(document.getElementById('chartDonut'), {
+  type: 'doughnut',
+  data: {
+    labels: freqLabels,
+    datasets: [{
+      data: freqCounts,
+      backgroundColor: freqColors.map(c => c + 'cc'),
+      borderColor: '#fff',
+      borderWidth: 3,
+      hoverOffset: 8,
+    }]
+  },
+  options: {
+    cutout: '66%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: { label: ctx => `  ${ctx.label}: ${ctx.raw}×` }
+      }
+    },
+    animation: { animateRotate: true, duration: 1000 }
+  }
+});
+
+// Legend manual
+const legendEl = document.getElementById('donut-legend');
+freqLabels.forEach((label, i) => {
+  const pct = ((freqCounts[i] / RAW.length) * 100).toFixed(0);
+  legendEl.innerHTML += `
+    <div class="flex items-center justify-between gap-2 min-w-0">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${freqColors[i]}"></span>
+        <span class="text-xs truncate" style="color:var(--text-mid)">${freqEmojis[i]} ${label}</span>
+      </div>
+      <span class="text-xs font-bold flex-shrink-0" style="color:${freqColors[i]}">${pct}%</span>
+    </div>`;
+});
+
+/* ══════════════════════════════════════════════
+   2. LINE — Confidence over Time
+══════════════════════════════════════════════ */
+const lineData = [...RAW].reverse();
+new Chart(document.getElementById('chartLine'), {
+  type: 'line',
+  data: {
+    labels: lineData.map(r => r.date),
+    datasets: [{
+      label: 'Confidence (%)',
+      data: lineData.map(r => r.confidence),
+      borderColor: '#4c2fa0',
+      backgroundColor: ctx => {
+        const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
+        g.addColorStop(0, 'rgba(76,47,160,0.18)');
+        g.addColorStop(1, 'rgba(76,47,160,0.00)');
+        return g;
+      },
+      pointBackgroundColor: lineData.map(r => r.color),
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      fill: true,
+      tension: 0.42,
+      borderWidth: 2.5,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        min: 0, max: 100,
+        ticks: { callback: v => v + '%', font: { size: 11 }, maxTicksLimit: 5 },
+        grid: { color: 'rgba(237,232,248,0.6)' }
+      },
+      x: {
+        ticks: { font: { size: 10 }, maxTicksLimit: 8 },
+        grid: { display: false }
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `  ${lineData[ctx.dataIndex].emoji} ${lineData[ctx.dataIndex].label}: ${ctx.raw}%`
+        }
+      }
+    },
+    animation: { duration: 1000 }
+  }
+});
+
+/* ══════════════════════════════════════════════
+   3. BAR — Frekuensi per Kondisi
+══════════════════════════════════════════════ */
+new Chart(document.getElementById('chartBar'), {
+  type: 'bar',
+  data: {
+    labels: freqLabels.map((l, i) => freqEmojis[i] + '  ' + l),
+    datasets: [{
+      label: 'Jumlah Deteksi',
+      data: freqCounts,
+      backgroundColor: freqColors.map(c => c + 'bb'),
+      borderColor: freqColors,
+      borderWidth: 2,
+      borderRadius: 12,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, font: { size: 11 } },
+        grid: { color: 'rgba(237,232,248,0.6)' }
+      },
+      x: {
+        grid: { display: false },
+        ticks: { font: { size: 12 } }
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: { label: ctx => `  ${ctx.raw}× terdeteksi` }
+      }
+    },
+    animation: { duration: 1000, delay: ctx => ctx.dataIndex * 80 }
+  }
+});
+</script>
+{% endif %}
+
 </body>
 </html>

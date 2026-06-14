@@ -30,6 +30,8 @@ print("Model loaded!")
 @app.on_event("startup")
 async def startup():
     init_db()
+    from rag import load_index
+    load_index()
 
 DISEASE_INFO = {
     "Flea_Allergy": {
