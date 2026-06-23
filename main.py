@@ -6,6 +6,7 @@ import tensorflow as tf
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from starlette.middleware.sessions import SessionMiddleware
 from datetime import datetime
@@ -18,6 +19,9 @@ app = FastAPI(title="Sakti Pet Care - CatSkin AI | Klasifikasi Penyakit Kulit Ku
 # ── Session Middleware ─────────────────────────────────────────────────────────
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "sakti-petcare-secret-2026"))
 templates = Jinja2Templates(directory="templates")
+
+# Mount folder assets agar dibaca sebagai URL path '/assets'
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 MODEL_PATH  = "model_terbaik.keras"
 IMG_SIZE    = (224, 224)
@@ -38,11 +42,11 @@ DISEASE_INFO = {
         "emoji": "🔴", "label": "Flea Allergy", "color": "#f59e0b",
         "description": "Alergi kutu pada kulit menyebabkan pengelupasan, kerontokan bulu, dan rasa gatal akibat pertumbuhan kutu berlebih.",
         "advice": [
-            "Jaga kulit kucing tetap kering dan bersih — kutu berkembang di tempat lembab.",
-            "Gunakan shampo antikutu sesuai rekomendasi dokter hewan.",
-            "Dokter mungkin meresepkan obat antikutu oral seperti flukonazol.",
-            "Cuci dan sterilkan semua aksesori kucing secara rutin.",
-            "Pisahkan dari hewan peliharaan lain selama pengobatan.",
+            "Memandikan kucing dengan shampoo berbahan dasar soothing seperti oatmeal atau antiseptik ringan membantu menenangkan kulit yang meradang.",
+            "Berikan obat kutu topikal berkualitas tinggi yang direkomendasikan dokter hewan (seperti Fluralaner, Selamectin, atau Imidacloprid). Obat ini harus diberikan secara konsisten setiap bulan, bukan hanya saat terlihat ada kutu, karena kucing FAD membutuhkan perlindungan konstan sepanjang tahun.",
+            "Jika Anda memiliki hewan peliharaan lain (kucing atau anjing lain), mereka wajib diberikan obat kutu pada saat yang sama. Hewan lain bisa menjadi reservoir (pembawa) kutu yang akan terus mendatangkan kutu baru ke kucing yang sensitif.",
+            "Cuci alas tidur, selimut, atau bantal kucing dengan air panas minimal seminggu sekali untuk mematikan sisa larva kutu.",
+            "Pisahkan dari hewan peliharaan lain selama pengobatan agar menghindari penyebaran tungau/kutu.",
         ],
     },
     "Health": {
@@ -60,22 +64,22 @@ DISEASE_INFO = {
         "emoji": "🔵", "label": "Ringworm", "color": "#3b82f6",
         "description": "Ringworm (Dermatophytosis) adalah infeksi jamur menular yang menyebabkan bercak bulat bersisik dan kebotakan pada kulit.",
         "advice": [
-            "Ringworm sangat menular ke hewan lain dan manusia — tangani dengan sarung tangan!",
-            "Isolasi kucing dari anggota keluarga dan hewan lain segera.",
-            "Konsultasi dokter hewan untuk antijamur topikal dan/atau oral.",
+            "Tempatkan kucing yang terinfeksi di ruangan khusus yang mudah dibersihkan (misalnya kamar mandi atau ruangan berlantai keramik tanpa karpet)",
+            "Memandikan kucing menggunakan shampoo khusus anti-jamur (biasanya mengandung miconazole dan chlorhexidine) 2 kali seminggu. Biarkan shampoo meresap selama 10 menit sebelum dibilas.",
+            "Untuk infeksi yang menyebar luas, konsultasi dengan dokter akan memberikan obat antijamur oral seperti Itraconazole atau Terbinafine. Obat ini wajib dihabiskan sesuai periode yang ditentukan (biasanya beberapa minggu) meskipun gejala klinis tampak sudah sembuh.",
             "Cuci semua permukaan, karpet, dan tempat tidur hewan dengan disinfektan.",
-            "Periksa anggota keluarga — terutama anak-anak — untuk tanda yang sama.",
+            "Jika bulu kucing sangat panjang atau gimbal, mencukur bulu di sekitar area lesi dapat membantu obat topikal meresap lebih baik dan mengurangi penyebaran.",
         ],
     },
     "Scabies": {
         "emoji": "🦠", "label": "Scabies", "color": "#a855f7",
         "description": "Scabies disebabkan oleh infeksi tungau parasit yang mengakibatkan kerak pada bulu dan iritasi kulit.",
         "advice": [
-            "Segera bawa kucing ke dokter hewan untuk pemeriksaan skin scraping.",
-            "Hindari kontak dengan kucing lain untuk sementara waktu.",
-            "Dokter biasanya meresepkan obat antiparasit seperti ivermectin atau amitraz.",
+            "Pisahkan kucing di ruangan isolasi yang tidak memiliki akses ke hewan lain.",
+            "Berikan obat tetes tengkuk yang mengandung bahan aktif seperti Selamectin atau Fluralaner. Obat ini diserap ke dalam darah dan sangat efektif membunuh tungau dalam beberapa hari.",
+            "Untuk membantu merontokkan kerak tebal dan mengurangi gatal, kucing bisa dimandikan dengan shampoo yang mengandung belerang atau antiseptik. Mandi ini membantu membersihkan kulit mati tempat tungau bersarang.",
             "Jaga kebersihan tempat tidur dan peralatan kucing.",
-            "Berikan nutrisi seimbang untuk memperkuat sistem imun.",
+            "Pasang Elizabethan collar pada leher kucing untuk mencegah mereka mencakar wajah dan telinga secara merusak selama masa pengobatan.",
         ],
     },
 }
