@@ -159,7 +159,7 @@
         <div class="flex items-center justify-between px-5 py-4" id="modal-header" style="background:var(--purple-deep)">
           <div>
             <p class="font-bold text-white text-sm" id="modal-label">—</p>
-            <p class="text-xs" id="modal-conf" style="color:var(--gold)">—</p>
+            <p class="text-xs" id="modal-conf" style="color:#ffffff">—</p>
           </div>
           <button onclick="closeImageModal()" class="text-white opacity-60 hover:opacity-100 text-xl font-bold">✕</button>
         </div>
@@ -180,6 +180,39 @@
   // Data dari Jinja2
   const records = {{ records | tojson }};
   if (records.length === 0) { document.getElementById('kpi-row').style.display = 'none'; }
+
+  // ── Modal preview gambar ─────────────────────────────────────────────────
+  // Sebelumnya fungsi ini dipanggil di HTML (onclick) tapi belum didefinisikan,
+  // sehingga klik "Lihat foto" tidak melakukan apa-apa (error di console:
+  // "openImageModal is not defined"). Ditambahkan di sini.
+  function openImageModal(imageUrl, label, confidence, color) {
+    const modal      = document.getElementById('img-modal');
+    const modalImg    = document.getElementById('modal-img');
+    const modalLabel  = document.getElementById('modal-label');
+    const modalConf   = document.getElementById('modal-conf');
+    const modalHeader = document.getElementById('modal-header');
+
+    modalImg.src = imageUrl;
+    modalLabel.textContent = label;
+    modalConf.textContent = confidence + '% yakin';
+    if (color) {
+      modalHeader.style.background = color;
+    }
+
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // cegah scroll background saat modal terbuka
+  }
+
+  function closeImageModal() {
+    const modal = document.getElementById('img-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  // Tutup modal dengan tombol Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeImageModal();
+  });
 
   // ── KPI ──────────────────────────────────────────────────────────────────
   if (records.length > 0) {
