@@ -636,12 +636,17 @@ async def dokter_patient_detail(request: Request, patient_id: int):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
+        # SESUDAH — tambahkan konversi datetime sebelum ke template
         cursor.execute("SELECT id, name, email, created_at FROM users WHERE id = %s AND role = 'user'", (patient_id,))
         patient = cursor.fetchone()
         if not patient:
             cursor.close()
             db.close()
             raise HTTPException(status_code=404, detail="Pasien tidak ditemukan.")
+
+        # ── Fix patient datetime ──
+        if patient.get("created_at"):
+            patient["created_at"] = patient["created_at"].strftime("%d %b %Y")
 
         cursor.execute(
             "SELECT id, predicted_class, label, confidence, description, created_at FROM predictions WHERE user_id = %s ORDER BY created_at DESC",
@@ -652,6 +657,9 @@ async def dokter_patient_detail(request: Request, patient_id: int):
             info = disease_info.get(r["predicted_class"], {})
             r["emoji"] = info.get("emoji", "❓")
             r["color"] = info.get("color", "#888")
+            # ── Fix records datetime ──
+            if r.get("created_at"):
+                r["created_at"] = r["created_at"].strftime("%Y-%m-%d %H:%M")
     finally:
         cursor.close()
         db.close()

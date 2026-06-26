@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Riwayat {{ patient.name }} — Panel Dokter</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -19,6 +20,8 @@
     .sidebar-link.active { background:var(--purple-mid); color:#fff; }
     .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
     .badge-conf { display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; }
+    .section-badge { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:4px 10px; border-radius:99px; background:var(--purple-pale); color:var(--purple-mid); margin-bottom:12px; }
+    .kpi-mini { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:14px; padding:16px 20px; }
   </style>
 </head>
 <body>
@@ -26,24 +29,87 @@
 <div class="flex min-h-screen">
   {% include "dokter/_sidebar.html" %}
 
-  <main class="flex-1 p-8">
-    <a href="/dokter/patients" class="text-xs font-bold" style="color:var(--purple-mid)">← Kembali ke Daftar Pasien</a>
+  <main class="flex-1 p-8 overflow-y-auto">
+    <a href="/dokter/patients" class="inline-flex items-center gap-1 text-xs font-bold hover:opacity-70 transition-opacity" style="color:var(--purple-mid)">← Kembali ke Daftar Pasien</a>
 
-    <div class="flex items-center gap-4 mt-4 mb-8">
-      <div class="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">
+    <!-- Patient Header -->
+    <div class="flex items-center gap-5 mt-5 mb-8 p-6 rounded-2xl" style="background:#fff;border:1px solid rgba(212,168,67,0.15)">
+      <div class="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0"
+           style="background:linear-gradient(135deg,var(--purple-mid),var(--purple-deep));color:#fff">
         {{ patient.name[0]|upper }}
       </div>
-      <div>
+      <div class="flex-1">
         <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">{{ patient.name }}</h1>
-        <p class="text-sm" style="color:var(--text-soft)">{{ patient.email }} · Terdaftar {{ patient.created_at.strftime('%d %b %Y') if patient.created_at else '-' }}</p>
+        <p class="text-sm" style="color:var(--text-soft)">{{ patient.email }} · Terdaftar {{ patient.created_at if patient.created_at else '-' }}</p>
+      </div>
+      <div class="text-right">
+        <p class="serif text-3xl font-bold" style="color:var(--purple-deep)">{{ records|length }}</p>
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total Prediksi</p>
       </div>
     </div>
 
+    <!-- KPI mini -->
+    <div class="grid grid-cols-3 gap-4 mb-6" id="kpi-row">
+      <div class="kpi-mini">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Prediksi Terbanyak</p>
+        <p class="font-bold text-base" id="kpi-most" style="color:var(--purple-deep)">—</p>
+      </div>
+      <div class="kpi-mini">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Rata-rata Confidence</p>
+        <p class="font-bold text-base" id="kpi-avg" style="color:var(--gold)">—</p>
+      </div>
+      <div class="kpi-mini">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Analisis Terbaru</p>
+        <p class="font-bold text-base" id="kpi-last" style="color:var(--purple-deep)">—</p>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    {% if records|length > 0 %}
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+
+      <!-- Donut distribusi pasien ini -->
+      <div class="stat-card">
+        <div class="section-badge">📊 Distribusi</div>
+        <h3 class="font-bold text-base mb-4" style="color:var(--purple-deep)">Kondisi yang Terdeteksi</h3>
+        <div class="flex items-center gap-6">
+          <div style="position:relative;width:140px;height:140px;flex-shrink:0">
+            <canvas id="patientDonut" width="140" height="140"></canvas>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+              <p class="serif font-bold text-xl" style="color:var(--purple-deep);line-height:1">{{ records|length }}</p>
+              <p style="font-size:9px;color:var(--text-soft);font-weight:700;text-transform:uppercase">Sesi</p>
+            </div>
+          </div>
+          <div class="flex-1 space-y-2" id="donut-legend"></div>
+        </div>
+      </div>
+
+      <!-- Line: confidence trend pasien ini -->
+      <div class="stat-card">
+        <div class="section-badge">📉 Tren</div>
+        <h3 class="font-bold text-base mb-4" style="color:var(--purple-deep)">Confidence per Sesi</h3>
+        <canvas id="patientLine" height="130"></canvas>
+      </div>
+    </div>
+
+    <!-- Bar: Frekuensi kondisi paling sering terdeteksi (pasien ini) -->
+    <div class="stat-card mb-6">
+      <div class="section-badge">📈 Frekuensi</div>
+      <h3 class="font-bold text-base mb-1" style="color:var(--purple-deep)">Kondisi Paling Sering Terdeteksi</h3>
+      <p class="text-xs mb-5" style="color:var(--text-soft)">Berdasarkan {{ records|length }} analisis</p>
+      <div style="position:relative; height:220px;">
+        <canvas id="patientBar"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabel riwayat -->
     <div class="stat-card">
-      <h3 class="font-bold mb-5" style="color:var(--purple-deep)">Riwayat Prediksi ({{ records|length }})</h3>
+      <div class="section-badge">📋 Log</div>
+      <h3 class="font-bold text-base mb-4" style="color:var(--purple-deep)">Semua Riwayat Prediksi</h3>
       <div class="space-y-3">
         {% for r in records %}
-        <div class="flex items-center gap-4 p-4 rounded-xl" style="background:var(--cream)">
+        <div class="flex items-center gap-4 p-4 rounded-xl transition-all hover:shadow-sm" style="background:var(--cream)">
           <div class="w-12 h-12 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style="background:{{ r.color }}18">{{ r.emoji }}</div>
           <div class="flex-1">
             <div class="flex items-center gap-2 flex-wrap mb-1">
@@ -53,8 +119,8 @@
             <p class="text-xs" style="color:var(--text-soft)">{{ r.description }}</p>
           </div>
           <div class="text-right text-xs flex-shrink-0" style="color:var(--text-soft)">
-            {{ r.created_at.strftime('%d %b %Y') if r.created_at else '-' }}<br/>
-            {{ r.created_at.strftime('%H:%M') if r.created_at else '' }}
+            {{ r.created_at[:10] if r.created_at else '-' }}<br/>
+            {{ r.created_at[11:16] if r.created_at else '' }}
           </div>
         </div>
         {% else %}
@@ -62,8 +128,147 @@
         {% endfor %}
       </div>
     </div>
+
   </main>
 </div>
+
+<script>
+  Chart.defaults.font.family = "'DM Sans', sans-serif";
+  Chart.defaults.color = '#8b7fb8';
+
+  // Data dari Jinja2
+  const records = {{ records | tojson }};
+  if (records.length === 0) { document.getElementById('kpi-row').style.display = 'none'; }
+
+  // ── KPI ──────────────────────────────────────────────────────────────────
+  if (records.length > 0) {
+    // most frequent label
+    const freq = {};
+    records.forEach(r => { freq[r.label] = (freq[r.label] || 0) + 1; });
+    const mostLabel = Object.entries(freq).sort((a,b) => b[1]-a[1])[0];
+    document.getElementById('kpi-most').textContent = mostLabel[0] + ' (' + mostLabel[1] + '×)';
+
+    // avg confidence
+    const avg = (records.reduce((s,r) => s + r.confidence, 0) / records.length).toFixed(1);
+    document.getElementById('kpi-avg').textContent = avg + '%';
+
+    // latest date — records already sorted desc by backend
+    const last = records[0];
+    document.getElementById('kpi-last').textContent = last.created_at
+      ? last.created_at.substring(0, 10) : '—';
+  }
+
+  // ── Donut: distribusi pasien ─────────────────────────────────────────────
+  if (records.length > 0) {
+    const freq2 = {};
+    records.forEach(r => {
+      if (!freq2[r.label]) freq2[r.label] = { count: 0, color: r.color, emoji: r.emoji };
+      freq2[r.label].count++;
+    });
+    const entries = Object.entries(freq2);
+    const dLabels = entries.map(([l, v]) => v.emoji + ' ' + l);
+    const dCounts = entries.map(([_, v]) => v.count);
+    const dColors = entries.map(([_, v]) => v.color);
+
+    new Chart(document.getElementById('patientDonut'), {
+      type: 'doughnut',
+      data: {
+        labels: dLabels,
+        datasets: [{ data: dCounts, backgroundColor: dColors.map(c => c+'dd'), borderColor:'#fff', borderWidth:3, hoverOffset:5 }]
+      },
+      options: {
+        cutout: '65%',
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw} sesi` } } },
+        animation: { duration: 700 }
+      }
+    });
+
+    // Legend manual
+    const legendEl = document.getElementById('donut-legend');
+    entries.forEach(([label, v]) => {
+      const pct = ((v.count / records.length) * 100).toFixed(0);
+      legendEl.innerHTML += `
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${v.color}"></span>
+            <span style="font-size:12px;font-weight:600;color:var(--text-mid)">${v.emoji} ${label}</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${v.color}">${pct}%</span>
+        </div>`;
+    });
+
+    // ── Bar Chart: frekuensi per kondisi (pasien ini) ───────────────────────
+    // Pakai freq2 yang sama dengan donut, supaya angka & warna selalu konsisten.
+    const bLabels = entries.map(([l, v]) => v.emoji + ' ' + l);
+    const bCounts = entries.map(([_, v]) => v.count);
+    const bColors = entries.map(([_, v]) => v.color);
+
+    new Chart(document.getElementById('patientBar'), {
+      type: 'bar',
+      data: {
+        labels: bLabels,
+        datasets: [{
+          data: bCounts,
+          backgroundColor: bColors.map(c => c + 'cc'),
+          borderColor: bColors,
+          borderWidth: 2,
+          borderRadius: 8,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'x',
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: {
+          callbacks: { label: ctx => ` ${ctx.raw} sesi` }
+        }},
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#ede8f8' }, ticks: { stepSize: 1 } },
+          x: { grid: { display: false } }
+        },
+        animation: { duration: 800 }
+      }
+    });
+
+    // ── Line chart ──────────────────────────────────────────────────────────
+    // records sorted desc → reverse for chronological
+    const sorted = [...records].reverse();
+    const lineLabels = sorted.map((r, i) => '#' + (i + 1));
+    const lineData   = sorted.map(r => r.confidence);
+    const ptColors   = sorted.map(r => r.color);
+
+    new Chart(document.getElementById('patientLine'), {
+      type: 'line',
+      data: {
+        labels: lineLabels,
+        datasets: [{
+          label: 'Confidence (%)',
+          data: lineData,
+          borderColor: '#4c2fa0',
+          backgroundColor: 'rgba(76,47,160,0.07)',
+          borderWidth: 2.5,
+          tension: 0.35,
+          fill: true,
+          pointBackgroundColor: ptColors,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false }, tooltip: {
+          callbacks: { label: ctx => ` ${ctx.raw}% keyakinan` }
+        }},
+        scales: {
+          y: { min: 0, max: 100, grid: { color: '#ede8f8' }, ticks: { callback: v => v + '%' } },
+          x: { grid: { display: false } }
+        },
+        animation: { duration: 700 }
+      }
+    });
+  }
+</script>
 
 </body>
 </html>

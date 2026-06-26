@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Statistik — Panel Dokter Sakti Pet Care</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -18,8 +19,9 @@
     .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
     .sidebar-link.active { background:var(--purple-mid); color:#fff; }
     .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
-    .bar-track { height:10px; background:var(--purple-pale); border-radius:99px; overflow:hidden; }
-    .bar-fill { height:100%; border-radius:99px; }
+    .section-badge { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:4px 10px; border-radius:99px; background:var(--purple-pale); color:var(--purple-mid); margin-bottom:12px; }
+    .kpi-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:20px 24px; position:relative; overflow:hidden; }
+    .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--purple-mid),var(--gold)); }
   </style>
 </head>
 <body>
@@ -27,37 +29,72 @@
 <div class="flex min-h-screen">
   {% include "dokter/_sidebar.html" %}
 
-  <main class="flex-1 p-8">
+  <main class="flex-1 p-8 overflow-y-auto">
+
+    <!-- Header -->
     <div class="mb-8">
       <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Panel Dokter</span>
       <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Statistik Diagnosis</h1>
       <p class="text-sm mt-1" style="color:var(--text-soft)">Ringkasan hasil prediksi dari seluruh user, {{ user.name }} 👋</p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
-      <div class="stat-card">
-        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total Prediksi</p>
-        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.total_predictions }}</p>
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+      <div class="kpi-card">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Total Prediksi</p>
+        <p class="serif text-4xl font-bold" style="color:var(--purple-deep)">{{ stats.total_predictions }}</p>
+        <p class="text-xs mt-1" style="color:var(--text-soft)">semua waktu</p>
       </div>
-      <div class="stat-card">
-        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total Pasien (User)</p>
-        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.total_patients }}</p>
+      <div class="kpi-card">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Total Pasien</p>
+        <p class="serif text-4xl font-bold" style="color:var(--purple-deep)">{{ stats.total_patients }}</p>
+        <p class="text-xs mt-1" style="color:var(--text-soft)">user terdaftar</p>
       </div>
-      <div class="stat-card">
-        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Prediksi Minggu Ini</p>
-        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.this_week }}</p>
+      <div class="kpi-card">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Minggu Ini</p>
+        <p class="serif text-4xl font-bold" style="color:var(--purple-deep)">{{ stats.this_week }}</p>
+        <p class="text-xs mt-1" style="color:var(--text-soft)">prediksi baru</p>
       </div>
-      <div class="stat-card">
-        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Rata-rata Keyakinan</p>
-        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.avg_confidence }}%</p>
+      <div class="kpi-card">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Rata-rata Keyakinan</p>
+        <p class="serif text-4xl font-bold" style="color:var(--gold)">{{ stats.avg_confidence }}%</p>
+        <p class="text-xs mt-1" style="color:var(--text-soft)">akurasi AI</p>
       </div>
     </div>
 
-    <div class="grid lg:grid-cols-2 gap-6">
+    <!-- Row 1: Donut + Bar Chart -->
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+
       <!-- Distribusi per kelas -->
       <div class="stat-card">
-        <h3 class="font-bold mb-5" style="color:var(--purple-deep)">Distribusi Diagnosis</h3>
-        <div class="space-y-4">
+        <div class="section-badge">📊 Distribusi</div>
+        <h3 class="font-bold text-lg mb-1" style="color:var(--purple-deep)">Distribusi Diagnosis</h3>
+        <p class="text-xs mb-5" style="color:var(--text-soft)">Proporsi tiap diagnosis yang terdeteksi</p>
+
+        <!-- Donut + Legend -->
+        <div class="flex items-center gap-6 mb-6">
+          <div style="position:relative;width:150px;height:150px;flex-shrink:0">
+            <canvas id="donutChart" width="150" height="150"></canvas>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
+              <p class="serif font-bold text-2xl" style="color:var(--purple-deep);line-height:1">{{ stats.total_predictions }}</p>
+              <p style="font-size:10px;color:var(--text-soft);font-weight:700;text-transform:uppercase">Total</p>
+            </div>
+          </div>
+          <div class="flex-1 space-y-2">
+            {% for d in distribution %}
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ d.color }}"></span>
+                <span class="text-xs font-semibold" style="color:var(--text-mid)">{{ d.emoji }} {{ d.label }}</span>
+              </div>
+              <span class="text-xs font-bold" style="color:{{ d.color }}">{{ d.percent }}%</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Bar track per kelas (dipertahankan) -->
+        <div class="space-y-3 pt-4 border-t" style="border-color:var(--purple-pale)">
           {% for d in distribution %}
           <div>
             <div class="flex justify-between text-sm font-semibold mb-1.5">
@@ -72,17 +109,44 @@
         </div>
       </div>
 
+      <!-- Bar: Frekuensi per kondisi -->
+      <div class="stat-card">
+        <div class="section-badge">📈 Frekuensi</div>
+        <h3 class="font-bold text-lg mb-1" style="color:var(--purple-deep)">Kondisi Paling Sering</h3>
+        <p class="text-xs mb-5" style="color:var(--text-soft)">Berdasarkan {{ stats.total_predictions }} analisis</p>
+        <canvas id="barChart" height="160"></canvas>
+      </div>
+    </div>
+
+    <!-- Row 2: Line chart confidence + Tabel prediksi terbaru -->
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+
+      <!-- Line: confidence trend -->
+      <div class="stat-card">
+        <div class="section-badge">📉 Tren Waktu</div>
+        <h3 class="font-bold text-lg mb-1" style="color:var(--purple-deep)">Confidence per Sesi Analisis</h3>
+        <p class="text-xs mb-5" style="color:var(--text-soft)">Tingkat keyakinan AI dari waktu ke waktu</p>
+        <canvas id="lineChart" height="160"></canvas>
+      </div>
+
       <!-- Prediksi terbaru -->
       <div class="stat-card">
-        <h3 class="font-bold mb-5" style="color:var(--purple-deep)">Prediksi Terbaru</h3>
-        <div class="space-y-3 max-h-80 overflow-y-auto">
+        <div class="section-badge">🕐 Terbaru</div>
+        <h3 class="font-bold text-lg mb-4" style="color:var(--purple-deep)">Prediksi Terbaru</h3>
+        <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
           {% for p in recent_predictions %}
-          <div class="flex items-center justify-between py-2 border-b text-sm" style="border-color:var(--purple-pale)">
-            <div>
-              <span class="font-semibold" style="color:var(--text-mid)">{{ p.user_name }}</span>
-              <span style="color:var(--text-soft)"> → {{ p.label }}</span>
+          <div class="flex items-center justify-between p-3 rounded-xl" style="background:var(--cream); border-left:3px solid {{ p.color }}">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                   style="background:{{ p.color }}18">{{ p.emoji }}</div>
+              <div>
+                <p class="text-xs font-bold" style="color:var(--purple-deep)">{{ p.user_name }}</p>
+                <p class="text-xs font-semibold" style="color:{{ p.color }}">{{ p.label }}</p>
+              </div>
             </div>
-            <span class="text-xs font-bold" style="color:var(--gold)">{{ p.confidence }}%</span>
+            <span class="text-xs font-bold px-2 py-1 rounded-full" style="background:{{ p.color }}18;color:{{ p.color }}">
+              {{ p.confidence }}%
+            </span>
           </div>
           {% else %}
           <p class="text-sm" style="color:var(--text-soft)">Belum ada prediksi.</p>
@@ -90,8 +154,126 @@
         </div>
       </div>
     </div>
+
   </main>
 </div>
+
+<script>
+  // ── Data dari Jinja2 ─────────────────────────────────────────────────────
+  const distribution = {{ distribution | tojson }};
+  const recentPredictions = {{ recent_predictions | tojson }};
+
+  const COLORS = distribution.map(d => d.color);
+  const LABELS = distribution.map(d => d.emoji + ' ' + d.label);
+  const COUNTS = distribution.map(d => d.count);
+
+  // ── Global Chart.js defaults ─────────────────────────────────────────────
+  Chart.defaults.font.family = "'DM Sans', sans-serif";
+  Chart.defaults.color = '#8b7fb8';
+
+  // ── Donut Chart ──────────────────────────────────────────────────────────
+  new Chart(document.getElementById('donutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: LABELS,
+      datasets: [{
+        data: COUNTS,
+        backgroundColor: COLORS.map(c => c + 'dd'),
+        borderColor: '#fff',
+        borderWidth: 3,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      cutout: '68%',
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} prediksi` }
+      }},
+      animation: { animateRotate: true, duration: 800 }
+    }
+  });
+
+  // ── Bar Chart ────────────────────────────────────────────────────────────
+  new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [{
+        data: COUNTS,
+        backgroundColor: COLORS.map(c => c + 'cc'),
+        borderColor: COLORS,
+        borderWidth: 2,
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'x',
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ` ${ctx.raw} prediksi` }
+      }},
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#ede8f8' }, ticks: { stepSize: 1 } },
+        x: { grid: { display: false } }
+      },
+      animation: { duration: 800 }
+    }
+  });
+
+  // ── Line Chart — confidence trend ────────────────────────────────────────
+  // recent_predictions sudah terurut dari backend (terbaru -> terlama).
+  // Balik jadi kronologis (terlama -> terbaru) supaya tren berjalan maju ke kanan.
+  const chronological  = recentPredictions.slice().reverse();
+  const lineLabels     = chronological.map((p, i) => '#' + (i + 1));
+  const lineData       = chronological.map(p => p.confidence);
+  const lineColors     = chronological.map(p => p.color);
+  const lineLabelsText = chronological.map(p => p.emoji + ' ' + p.label);
+
+  new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels: lineLabels,
+      datasets: [{
+        label: 'Confidence (%)',
+        data: lineData,
+        borderColor: '#4c2fa0',
+        backgroundColor: 'rgba(76,47,160,0.08)',
+        borderWidth: 2.5,
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: lineColors,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointHoverBackgroundColor: lineColors,
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            // Judul tooltip pakai nama+emoji diagnosis pada titik tersebut
+            title: ctx => lineLabelsText[ctx[0].dataIndex],
+            label: ctx => ` ${ctx.raw}% keyakinan`
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: 0, max: 100,
+          grid: { color: '#ede8f8' },
+          ticks: { callback: v => v + '%' }
+        },
+        x: { grid: { display: false } }
+      },
+      animation: { duration: 800 }
+    }
+  });
+</script>
 
 </body>
 </html>
