@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from starlette.middleware.sessions import SessionMiddleware
 from datetime import datetime, timedelta
+import base64
+from fastapi.responses import Response
 from database import get_db, init_db, get_disease_info_dict, log_activity
 from auth import hash_password, verify_password
 from rag import ask as rag_ask, build_index
@@ -197,8 +199,11 @@ async def predict(request: Request, file: UploadFile = File(...)):
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "INSERT INTO predictions (user_id, predicted_class, label, confidence, description, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-            (user["id"], predicted_key, info["label"], round(confidence, 2), info["description"], datetime.now())
+            """INSERT INTO predictions 
+            (user_id, predicted_class, label, confidence, description, image_data, created_at) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (user["id"], predicted_key, info["label"], round(confidence, 2), 
+            info["description"], image_bytes, datetime.now())  # tambah image_bytes
         )
         db.commit()
         prediction_id = cursor.lastrowid
@@ -214,6 +219,36 @@ async def predict(request: Request, file: UploadFile = File(...)):
         "color": info["color"], "confidence": round(confidence, 2), "description": info["description"],
         "advice": info["advice"], "all_probs": all_probs, "prediction_id": prediction_id,
     })
+
+@app.get("/predictions/{prediction_id}/image")
+async def get_prediction_image(request: Request, prediction_id: int):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401)
+    
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        # Dokter bisa lihat semua, user hanya miliknya sendiri
+        if user["role"] in ("dokter", "admin"):
+            cursor.execute(
+                "SELECT image_data FROM predictions WHERE id = %s", 
+                (prediction_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT image_data FROM predictions WHERE id = %s AND user_id = %s",
+                (prediction_id, user["id"])
+            )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+        db.close()
+    
+    if not row or not row["image_data"]:
+        raise HTTPException(status_code=404, detail="Gambar tidak ditemukan.")
+    
+    return Response(content=row["image_data"], media_type="image/jpeg")
 
 
 @app.get("/history", response_class=HTMLResponse)
