@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kelola User — Admin Sakti Pet Care</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+    .btn-gold { background:linear-gradient(135deg,var(--gold),#c8962e); color:var(--purple-deep); font-weight:700; }
+    .btn-purple { background:linear-gradient(135deg,var(--purple-mid),var(--purple-deep)); color:#fff; font-weight:700; }
+    .role-badge { font-size:10px; font-weight:800; padding:3px 10px; border-radius:99px; text-transform:uppercase; }
+    .modal-overlay { background:rgba(26,17,40,0.5); backdrop-filter:blur(4px); }
+    input, select { border:1.5px solid var(--purple-pale); border-radius:10px; padding:9px 12px; font-size:14px; width:100%; outline:none; }
+    input:focus, select:focus { border-color:var(--purple-mid); }
+  </style>
+</head>
+<body>
+
+<div class="flex min-h-screen">
+  {% include "admin/_sidebar.html" %}
+
+  <main class="flex-1 p-8">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Admin Panel</span>
+        <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Kelola User</h1>
+      </div>
+      <button onclick="openModal('create')" class="btn-gold px-5 py-2.5 rounded-xl text-sm">➕ Tambah User</button>
+    </div>
+
+    {% if msg %}
+    <div class="mb-5 p-3 rounded-xl text-sm font-semibold" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0">✅ {{ msg }}</div>
+    {% endif %}
+    {% if error %}
+    <div class="mb-5 p-3 rounded-xl text-sm font-semibold" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca">⚠️ {{ error }}</div>
+    {% endif %}
+
+    <div class="stat-card overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left border-b" style="border-color:var(--purple-pale)">
+            <th class="py-3 font-bold" style="color:var(--text-soft)">Nama</th>
+            <th class="py-3 font-bold" style="color:var(--text-soft)">Email</th>
+            <th class="py-3 font-bold" style="color:var(--text-soft)">Role</th>
+            <th class="py-3 font-bold" style="color:var(--text-soft)">Status</th>
+            <th class="py-3 font-bold" style="color:var(--text-soft)">Terdaftar</th>
+            <th class="py-3 font-bold text-right" style="color:var(--text-soft)">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr class="border-b" style="border-color:var(--purple-pale)">
+            <td class="py-3 font-semibold" style="color:var(--text-mid)">{{ u.name }}</td>
+            <td class="py-3" style="color:var(--text-soft)">{{ u.email }}</td>
+            <td class="py-3">
+              <span class="role-badge"
+                style="background:{% if u.role=='admin' %}#fee2e2;color:#b91c1c{% elif u.role=='dokter' %}#dbeafe;color:#1d4ed8{% else %}var(--purple-pale);color:var(--purple-mid){% endif %}">
+                {{ u.role }}
+              </span>
+            </td>
+            <td class="py-3">
+              {% if u.is_active %}
+              <span class="role-badge" style="background:#dcfce7;color:#166534">Aktif</span>
+              {% else %}
+              <span class="role-badge" style="background:#f3f4f6;color:#6b7280">Nonaktif</span>
+              {% endif %}
+            </td>
+            <!-- Sesudah -->
+            <td class="py-3 text-xs" style="color:var(--text-soft)">{{ u.created_at if u.created_at else '-' }}</td>
+            <td class="py-3 text-right space-x-2">
+              <button onclick='openModal("edit", {{ u | tojson }})' class="text-xs font-bold px-3 py-1.5 rounded-lg" style="background:var(--purple-pale);color:var(--purple-mid)">Edit</button>
+              {% if u.id != user.id %}
+              <button onclick="confirmDelete({{ u.id }}, '{{ u.name }}')" class="text-xs font-bold px-3 py-1.5 rounded-lg" style="background:#fee2e2;color:#b91c1c">Hapus</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- ── Modal Create/Edit ── -->
+<div id="user-modal" class="hidden fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl p-7 w-full max-w-md">
+    <h3 id="modal-title" class="serif text-2xl font-bold mb-5" style="color:var(--purple-deep)">Tambah User</h3>
+    <form id="user-form" method="POST" action="/admin/users/create" class="space-y-4">
+      <input type="hidden" name="user_id" id="form-user-id">
+      <div>
+        <label class="text-xs font-bold" style="color:var(--text-mid)">Nama</label>
+        <input type="text" name="name" id="form-name" required>
+      </div>
+      <div>
+        <label class="text-xs font-bold" style="color:var(--text-mid)">Email</label>
+        <input type="email" name="email" id="form-email" required>
+      </div>
+      <div id="password-field">
+        <label class="text-xs font-bold" style="color:var(--text-mid)">Password</label>
+        <input type="password" name="password" id="form-password">
+        <p class="text-[11px] mt-1" style="color:var(--text-soft)" id="password-hint">Minimal 6 karakter</p>
+      </div>
+      <div>
+        <label class="text-xs font-bold" style="color:var(--text-mid)">Role</label>
+        <select name="role" id="form-role">
+          <option value="user">User</option>
+          <option value="dokter">Dokter</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="checkbox" name="is_active" id="form-active" value="1" checked class="w-4 h-4">
+        <label for="form-active" class="text-sm font-semibold" style="color:var(--text-mid)">Akun aktif</label>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-xl font-bold border" style="color:var(--text-soft);border-color:var(--purple-pale)">Batal</button>
+        <button type="submit" class="flex-1 btn-purple py-2.5 rounded-xl">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Form delete tersembunyi ── -->
+<form id="delete-form" method="POST" action="" class="hidden"></form>
+
+<script>
+  function openModal(mode, data) {
+    const modal = document.getElementById('user-modal');
+    const form  = document.getElementById('user-form');
+    const title = document.getElementById('modal-title');
+    const pwField = document.getElementById('password-field');
+    const pwInput = document.getElementById('form-password');
+    const pwHint  = document.getElementById('password-hint');
+
+    if (mode === 'create') {
+      title.textContent = 'Tambah User';
+      form.action = '/admin/users/create';
+      form.reset();
+      document.getElementById('form-user-id').value = '';
+      pwInput.required = true;
+      pwHint.textContent = 'Minimal 6 karakter';
+    } else {
+      title.textContent = 'Edit User';
+      form.action = '/admin/users/' + data.id + '/edit';
+      document.getElementById('form-user-id').value = data.id;
+      document.getElementById('form-name').value = data.name;
+      document.getElementById('form-email').value = data.email;
+      document.getElementById('form-role').value = data.role;
+      document.getElementById('form-active').checked = !!data.is_active;
+      pwInput.required = false;
+      pwInput.value = '';
+      pwHint.textContent = 'Kosongkan jika tidak ingin mengubah password';
+    }
+    modal.classList.remove('hidden');
+  }
+
+  function closeModal() {
+    document.getElementById('user-modal').classList.add('hidden');
+  }
+
+  function confirmDelete(id, name) {
+    if (confirm('Hapus user "' + name + '"? Tindakan ini tidak bisa dibatalkan.')) {
+      const f = document.getElementById('delete-form');
+      f.action = '/admin/users/' + id + '/delete';
+      f.submit();
+    }
+  }
+</script>
+
+</body>
+</html>

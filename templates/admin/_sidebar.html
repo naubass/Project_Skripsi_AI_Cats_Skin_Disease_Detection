@@ -1,0 +1,24 @@
+<aside class="w-64 flex-shrink-0 p-6 border-r" style="background:#fff;border-color:rgba(212,168,67,0.15)">
+  <a href="/admin" class="flex items-center gap-3 mb-10">
+    <div class="w-10 h-10 rounded-xl overflow-hidden shadow border border-purple-100">
+      <img src="/assets/img/logo.png" onerror="this.src='https://via.placeholder.com/100?text=SPC'" class="w-full h-full object-cover">
+    </div>
+    <div>
+      <span class="serif font-bold text-lg" style="color:var(--purple-deep)">Sakti Pet Care</span>
+      <span class="block text-[10px] font-bold tracking-widest uppercase" style="color:var(--gold)">Admin Panel</span>
+    </div>
+  </a>
+
+  <nav class="space-y-1">
+    <a href="/admin" class="sidebar-link {% if active_page == 'dashboard' %}active{% endif %}">📊 Dashboard</a>
+    <a href="/admin/users" class="sidebar-link {% if active_page == 'users' %}active{% endif %}">👥 Kelola User</a>
+    <a href="/admin/logs" class="sidebar-link {% if active_page == 'logs' %}active{% endif %}">📜 Log Aktivitas</a>
+  </nav>
+
+  <div class="mt-10 pt-6 border-t" style="border-color:rgba(212,168,67,0.15)">
+    <p class="text-xs font-bold px-4" style="color:var(--text-soft)">{{ user.name }}</p>
+    <p class="text-[10px] px-4 uppercase font-bold" style="color:var(--gold)">{{ user.role }}</p>
+    <a href="/" class="sidebar-link mt-2">🏠 Ke Halaman Utama</a>
+    <a href="/logout" class="sidebar-link" style="color:#e05252">🚪 Logout</a>
+  </div>
+</aside>

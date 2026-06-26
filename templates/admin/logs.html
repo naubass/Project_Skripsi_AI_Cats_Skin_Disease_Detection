@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log Aktivitas — Admin Sakti Pet Care</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+    .action-badge { font-size:10px; font-weight:800; padding:3px 10px; border-radius:99px; text-transform:uppercase; }
+    select { border:1.5px solid var(--purple-pale); border-radius:10px; padding:8px 12px; font-size:13px; outline:none; }
+  </style>
+</head>
+<body>
+
+<div class="flex min-h-screen">
+  {% include "admin/_sidebar.html" %}
+
+  <main class="flex-1 p-8">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Admin Panel</span>
+        <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Log Aktivitas</h1>
+      </div>
+      <form method="GET" action="/admin/logs">
+        <select name="action" onchange="this.form.submit()">
+          <option value="">Semua Aktivitas</option>
+          <option value="login" {% if filter_action == 'login' %}selected{% endif %}>Login</option>
+          <option value="predict" {% if filter_action == 'predict' %}selected{% endif %}>Prediksi</option>
+          <option value="chatbot" {% if filter_action == 'chatbot' %}selected{% endif %}>Chatbot</option>
+        </select>
+      </form>
+    </div>
+
+    <div class="stat-card overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left border-b" style="border-color:var(--purple-pale)">
+            <th class="py-3 font-bold" style="color:var(--text-soft)">User</th>
+            <th class="py-3 font-bold" style="color:var(--text-soft)">Aksi</th>
+            <th class="py-3 font-bold" style="color:var(--text-soft)">Detail</th>
+            <th class="py-3 font-bold text-right" style="color:var(--text-soft)">Waktu</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr class="border-b" style="border-color:var(--purple-pale)">
+            <td class="py-3 font-semibold" style="color:var(--text-mid)">{{ log.name or 'Unknown' }}</td>
+            <td class="py-3">
+              <span class="action-badge"
+                style="background:{% if log.action=='login' %}#dbeafe;color:#1d4ed8{% elif log.action=='predict' %}#fef3c7;color:#92400e{% else %}#ede8f8;color:#4c2fa0{% endif %}">
+                {{ log.action }}
+              </span>
+            </td>
+            <td class="py-3 text-xs" style="color:var(--text-soft)">{{ log.detail or '-' }}</td>
+            <td class="py-3 text-xs text-right" style="color:var(--text-soft)">{{ log.created_at.strftime('%d %b %Y, %H:%M') if log.created_at else '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="py-8 text-center text-sm" style="color:var(--text-soft)">Belum ada log aktivitas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

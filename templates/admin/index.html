@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard — Sakti Pet Care CatSkin AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+  </style>
+</head>
+<body>
+
+<div class="flex min-h-screen">
+  {% include "admin/_sidebar.html" %}
+
+  <main class="flex-1 p-8">
+    <div class="mb-8">
+      <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Admin Panel</span>
+      <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Dashboard</h1>
+      <p class="text-sm mt-1" style="color:var(--text-soft)">Selamat datang, {{ user.name }} 👋</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total User</p>
+        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.total_users }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total Dokter</p>
+        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.total_dokter }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total Prediksi</p>
+        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.total_predictions }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Aktivitas Hari Ini</p>
+        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.today_logs }}</p>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <h3 class="font-bold mb-4" style="color:var(--purple-deep)">Aktivitas Terbaru</h3>
+      <div class="space-y-2">
+        {% for log in recent_logs %}
+        <div class="flex items-center justify-between py-2 text-sm border-b" style="border-color:var(--purple-pale)">
+          <div>
+            <span class="font-semibold" style="color:var(--text-mid)">{{ log.name or 'Unknown' }}</span>
+            <span style="color:var(--text-soft)"> — {{ log.action }}{% if log.detail %} ({{ log.detail }}){% endif %}</span>
+          </div>
+          <span class="text-xs" style="color:var(--text-soft)">{{ log.created_at.strftime('%d %b, %H:%M') if log.created_at else '' }}</span>
+        </div>
+        {% else %}
+        <p class="text-sm" style="color:var(--text-soft)">Belum ada aktivitas tercatat.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Info Penyakit — Panel Dokter Sakti Pet Care</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+    .btn-purple { background:linear-gradient(135deg,var(--purple-mid),var(--purple-deep)); color:#fff; font-weight:700; }
+    input, textarea { border:1.5px solid var(--purple-pale); border-radius:10px; padding:9px 12px; font-size:13px; width:100%; outline:none; font-family:inherit; }
+    input:focus, textarea:focus { border-color:var(--purple-mid); }
+  </style>
+</head>
+<body>
+
+<div class="flex min-h-screen">
+  {% include "dokter/_sidebar.html" %}
+
+  <main class="flex-1 p-8">
+    <div class="mb-8">
+      <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Panel Dokter</span>
+      <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Info & Instruksi Penanganan Penyakit</h1>
+      <p class="text-sm mt-1" style="color:var(--text-soft)">Edit deskripsi dan langkah penanganan yang ditampilkan ke user setelah prediksi.</p>
+    </div>
+
+    {% if msg %}
+    <div class="mb-5 p-3 rounded-xl text-sm font-semibold" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0">✅ {{ msg }}</div>
+    {% endif %}
+
+    <div class="space-y-5">
+      {% for d in diseases %}
+      <div class="stat-card">
+        <form method="POST" action="/dokter/disease-info/{{ d.id }}/update" class="space-y-4">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center text-xl" style="background:{{ d.color }}18">{{ d.emoji }}</div>
+            <div>
+              <p class="font-bold" style="color:var(--purple-deep)">{{ d.label }}</p>
+              <p class="text-[10px] uppercase font-bold" style="color:var(--text-soft)">{{ d.predicted_class }}</p>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-4">
+            <div>
+              <label class="text-xs font-bold" style="color:var(--text-mid)">Label Tampilan</label>
+              <input type="text" name="label" value="{{ d.label }}" required>
+            </div>
+            <div>
+              <label class="text-xs font-bold" style="color:var(--text-mid)">Emoji</label>
+              <input type="text" name="emoji" value="{{ d.emoji }}" maxlength="4">
+            </div>
+            <div>
+              <label class="text-xs font-bold" style="color:var(--text-mid)">Warna (hex)</label>
+              <input type="text" name="color" value="{{ d.color }}">
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs font-bold" style="color:var(--text-mid)">Deskripsi</label>
+            <textarea name="description" rows="2">{{ d.description }}</textarea>
+          </div>
+
+          <div>
+            <label class="text-xs font-bold" style="color:var(--text-mid)">Langkah Penanganan (satu baris = satu poin)</label>
+            <textarea name="advice" rows="5">{{ d.advice_raw }}</textarea>
+          </div>
+
+          <div class="flex justify-between items-center pt-1">
+            <p class="text-[11px]" style="color:var(--text-soft)">Terakhir diubah oleh: {{ d.updated_by_name or '—' }} · {{ d.updated_at.strftime('%d %b %Y, %H:%M') if d.updated_at else '-' }}</p>
+            <button type="submit" class="btn-purple px-5 py-2 rounded-xl text-sm">Simpan Perubahan</button>
+          </div>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

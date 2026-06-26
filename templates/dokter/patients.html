@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Riwayat Pasien — Panel Dokter Sakti Pet Care</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+    .patient-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:16px; padding:18px; transition:all .2s; cursor:pointer; }
+    .patient-card:hover { border-color:var(--gold); transform:translateY(-2px); }
+    input[type="search"] { border:1.5px solid var(--purple-pale); border-radius:10px; padding:9px 14px; font-size:14px; outline:none; width:100%; }
+  </style>
+</head>
+<body>
+
+<div class="flex min-h-screen">
+  {% include "dokter/_sidebar.html" %}
+
+  <main class="flex-1 p-8">
+    <div class="mb-6">
+      <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Panel Dokter</span>
+      <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Riwayat Pasien</h1>
+      <p class="text-sm mt-1" style="color:var(--text-soft)">{{ patients|length }} user terdaftar dengan riwayat prediksi</p>
+    </div>
+
+    <form method="GET" action="/dokter/patients" class="mb-6">
+      <input type="search" name="q" value="{{ query or '' }}" placeholder="Cari nama atau email user...">
+    </form>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {% for p in patients %}
+      <a href="/dokter/patients/{{ p.id }}" class="patient-card block">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold" style="background:var(--purple-pale);color:var(--purple-mid)">
+            {{ p.name[0]|upper }}
+          </div>
+          <div>
+            <p class="font-bold text-sm" style="color:var(--purple-deep)">{{ p.name }}</p>
+            <p class="text-xs" style="color:var(--text-soft)">{{ p.email }}</p>
+          </div>
+        </div>
+        <div class="flex justify-between text-xs font-semibold pt-3 border-t" style="border-color:var(--purple-pale);color:var(--text-mid)">
+          <span>{{ p.total_predictions }} prediksi</span>
+          <span style="color:var(--gold)">Lihat detail →</span>
+        </div>
+      </a>
+      {% else %}
+      <p class="text-sm col-span-3" style="color:var(--text-soft)">Tidak ada user yang cocok.</p>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Statistik — Panel Dokter Sakti Pet Care</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+    .bar-track { height:10px; background:var(--purple-pale); border-radius:99px; overflow:hidden; }
+    .bar-fill { height:100%; border-radius:99px; }
+  </style>
+</head>
+<body>
+
+<div class="flex min-h-screen">
+  {% include "dokter/_sidebar.html" %}
+
+  <main class="flex-1 p-8">
+    <div class="mb-8">
+      <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Panel Dokter</span>
+      <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Statistik Diagnosis</h1>
+      <p class="text-sm mt-1" style="color:var(--text-soft)">Ringkasan hasil prediksi dari seluruh user, {{ user.name }} 👋</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total Prediksi</p>
+        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.total_predictions }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total Pasien (User)</p>
+        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.total_patients }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Prediksi Minggu Ini</p>
+        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.this_week }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Rata-rata Keyakinan</p>
+        <p class="serif text-3xl font-bold mt-1" style="color:var(--purple-deep)">{{ stats.avg_confidence }}%</p>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-6">
+      <!-- Distribusi per kelas -->
+      <div class="stat-card">
+        <h3 class="font-bold mb-5" style="color:var(--purple-deep)">Distribusi Diagnosis</h3>
+        <div class="space-y-4">
+          {% for d in distribution %}
+          <div>
+            <div class="flex justify-between text-sm font-semibold mb-1.5">
+              <span style="color:var(--text-mid)">{{ d.emoji }} {{ d.label }}</span>
+              <span style="color:{{ d.color }}">{{ d.count }} ({{ d.percent }}%)</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width:{{ d.percent }}%; background:{{ d.color }}"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Prediksi terbaru -->
+      <div class="stat-card">
+        <h3 class="font-bold mb-5" style="color:var(--purple-deep)">Prediksi Terbaru</h3>
+        <div class="space-y-3 max-h-80 overflow-y-auto">
+          {% for p in recent_predictions %}
+          <div class="flex items-center justify-between py-2 border-b text-sm" style="border-color:var(--purple-pale)">
+            <div>
+              <span class="font-semibold" style="color:var(--text-mid)">{{ p.user_name }}</span>
+              <span style="color:var(--text-soft)"> → {{ p.label }}</span>
+            </div>
+            <span class="text-xs font-bold" style="color:var(--gold)">{{ p.confidence }}%</span>
+          </div>
+          {% else %}
+          <p class="text-sm" style="color:var(--text-soft)">Belum ada prediksi.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>
