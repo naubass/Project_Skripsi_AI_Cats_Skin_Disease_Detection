@@ -358,10 +358,14 @@
           <!-- No -->
           <span class="text-xs font-black w-6 text-center flex-shrink-0" style="color:var(--text-soft)">{{ loop.index }}</span>
 
-          <!-- Emoji badge -->
-          <div class="w-12 h-12 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-               style="background:{{ r.color }}18">
-            {{ r.emoji }}
+          <!-- Foto hasil deteksi -->
+          <div class="w-14 h-14 rounded-xl overflow-hidden border-2 flex-shrink-0 cursor-pointer"
+               style="border-color:{{ r.color }}44;background:{{ r.color }}10"
+               onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')">
+            <img src="/predictions/{{ r.id }}/image"
+                 alt="{{ r.label }}"
+                 class="w-full h-full object-cover"
+                 onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center text-xl\'>{{ r.emoji }}</div>'">
           </div>
 
           <!-- Info -->
@@ -373,6 +377,11 @@
               </span>
             </div>
             <p class="text-xs truncate" style="color:var(--text-soft)">{{ r.description }}</p>
+            <button onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')"
+                    class="mt-1 text-[11px] font-semibold hover:opacity-70 transition-opacity"
+                    style="color:var(--purple-mid)">
+              🔍 Lihat foto →
+            </button>
           </div>
 
           <!-- Confidence mini bar (desktop only) -->
@@ -394,6 +403,26 @@
           </div>
         </div>
         {% endfor %}
+      </div>
+    </div>
+
+    <!-- Modal preview gambar -->
+    <div id="img-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+         style="background:rgba(26,17,40,0.75);backdrop-filter:blur(6px)"
+         onclick="closeImageModal()">
+      <div class="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-2xl" onclick="event.stopPropagation()">
+        <!-- Header modal -->
+        <div class="flex items-center justify-between px-5 py-4" id="modal-header" style="background:var(--purple-deep)">
+          <div>
+            <p class="font-bold text-white text-sm" id="modal-label">—</p>
+            <p class="text-xs text-white" id="modal-conf">—</p>
+          </div>
+          <button onclick="closeImageModal()" class="text-white opacity-60 hover:opacity-100 text-xl font-bold">✕</button>
+        </div>
+        <!-- Gambar -->
+        <div style="background:#1a1128">
+          <img id="modal-img" src="" alt="Preview" class="w-full object-contain" style="max-height:70vh">
+        </div>
       </div>
     </div>
 
@@ -434,6 +463,32 @@ document.addEventListener('click', e => {
     document.getElementById('nav-dropdown-menu').classList.add('hidden');
     document.getElementById('nav-chevron').style.transform = '';
   }
+});
+
+/* ── Modal preview gambar ── */
+function openImageModal(imageUrl, label, confidence, color) {
+  const modal      = document.getElementById('img-modal');
+  const modalImg    = document.getElementById('modal-img');
+  const modalLabel  = document.getElementById('modal-label');
+  const modalConf   = document.getElementById('modal-conf');
+  const modalHeader = document.getElementById('modal-header');
+
+  modalImg.src = imageUrl;
+  modalLabel.textContent = label;
+  modalConf.textContent = confidence + '% yakin';
+  if (color) modalHeader.style.background = color;
+
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeImageModal() {
+  document.getElementById('img-modal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeImageModal();
 });
 </script>
 
