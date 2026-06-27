@@ -1,4 +1,47 @@
-<aside class="w-64 flex-shrink-0 p-6 border-r" style="background:#fff;border-color:rgba(212,168,67,0.15)">
+<!-- ══════════════════════════════════════════════════════════
+     SIDEBAR ADMIN — Responsive (mobile: overlay drawer, desktop: fixed)
+     Tidak menghimpit konten karena <main> di tiap halaman tetap
+     menggunakan margin-left yang sesuai lewat class "main-with-sidebar".
+═══════════════════════════════════════════════════════════ -->
+
+<!-- Topbar mobile: hanya tampil di layar kecil, berisi tombol buka sidebar -->
+<div class="md:hidden flex items-center justify-between px-4 h-16 border-b sticky top-0 z-30"
+     style="background:#fff;border-color:rgba(212,168,67,0.15)">
+  <button onclick="toggleAdminSidebar()" aria-label="Buka menu"
+          class="w-10 h-10 rounded-xl flex items-center justify-center"
+          style="background:var(--purple-pale);color:var(--purple-mid)">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+    </svg>
+  </button>
+  <a href="/admin" class="flex items-center gap-2">
+    <span class="serif font-bold text-base" style="color:var(--purple-deep)">Sakti Pet Care</span>
+  </a>
+  <div class="w-10"></div> <!-- spacer biar judul tetap center -->
+</div>
+
+<!-- Overlay gelap di belakang sidebar saat dibuka (mobile only) -->
+<div id="admin-sidebar-overlay"
+     class="hidden fixed inset-0 z-40 md:hidden"
+     style="background:rgba(26,17,40,0.5);backdrop-filter:blur(2px)"
+     onclick="closeAdminSidebar()"></div>
+
+<!-- Sidebar -->
+<aside id="admin-sidebar"
+       class="fixed md:sticky top-0 left-0 h-screen w-64 flex-shrink-0 p-6 border-r z-50
+              transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-out
+              overflow-y-auto"
+       style="background:#fff;border-color:rgba(212,168,67,0.15)">
+
+  <!-- Tombol tutup, hanya muncul di mobile -->
+  <button onclick="closeAdminSidebar()" aria-label="Tutup menu"
+          class="md:hidden absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center"
+          style="background:var(--purple-pale);color:var(--purple-mid)">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+    </svg>
+  </button>
+
   <a href="/admin" class="flex items-center gap-3 mb-10">
     <div class="w-10 h-10 rounded-xl overflow-hidden shadow border border-purple-100">
       <img src="/assets/img/logo.png" onerror="this.src='https://via.placeholder.com/100?text=SPC'" class="w-full h-full object-cover">
@@ -22,3 +65,44 @@
     <a href="/logout" class="sidebar-link" style="color:#e05252">🚪 Logout</a>
   </div>
 </aside>
+
+<script>
+  function toggleAdminSidebar() {
+    const sidebar = document.getElementById('admin-sidebar');
+    const overlay = document.getElementById('admin-sidebar-overlay');
+    const isOpen  = sidebar.classList.contains('translate-x-0');
+    if (isOpen) {
+      closeAdminSidebar();
+    } else {
+      sidebar.classList.remove('-translate-x-full');
+      sidebar.classList.add('translate-x-0');
+      overlay.classList.remove('hidden');
+      document.body.style.overflow = 'hidden'; // cegah scroll background saat drawer terbuka
+    }
+  }
+
+  function closeAdminSidebar() {
+    const sidebar = document.getElementById('admin-sidebar');
+    const overlay = document.getElementById('admin-sidebar-overlay');
+    sidebar.classList.remove('translate-x-0');
+    sidebar.classList.add('-translate-x-full');
+    overlay.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  // Tutup otomatis saat resize ke desktop, supaya class translate tidak nyangkut
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 768) {
+      const sidebar = document.getElementById('admin-sidebar');
+      const overlay = document.getElementById('admin-sidebar-overlay');
+      sidebar.classList.remove('-translate-x-full', 'translate-x-0');
+      overlay.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+  });
+
+  // Tutup dengan tombol Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAdminSidebar();
+  });
+</script>

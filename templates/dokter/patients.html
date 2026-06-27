@@ -25,10 +25,10 @@
 </head>
 <body>
 
-<div class="flex min-h-screen">
+<div class="flex flex-col md:flex-row min-h-screen">
   {% include "dokter/_sidebar.html" %}
 
-  <main class="flex-1 p-8">
+  <main class="flex-1 p-5 md:p-8 min-w-0 overflow-y-auto">
     <div class="mb-6">
       <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Panel Dokter</span>
       <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Riwayat Pasien</h1>
