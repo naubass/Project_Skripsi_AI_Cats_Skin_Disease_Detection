@@ -97,6 +97,7 @@
       border-radius: 99px;
       font-size: 11px;
       font-weight: 700;
+      white-space: nowrap;
     }
 
     /* ── Section label ── */
@@ -354,74 +355,137 @@
 
       <div class="space-y-3">
         {% for r in records %}
-        <div class="card-hist">
-          <!-- No -->
-          <span class="text-xs font-black w-6 text-center flex-shrink-0" style="color:var(--text-soft)">{{ loop.index }}</span>
-
-          <!-- Foto hasil deteksi -->
-          <div class="w-14 h-14 rounded-xl overflow-hidden border-2 flex-shrink-0 cursor-pointer"
-               style="border-color:{{ r.color }}44;background:{{ r.color }}10"
-               onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')">
-            <img src="/predictions/{{ r.id }}/image"
-                 alt="{{ r.label }}"
-                 class="w-full h-full object-cover"
-                 onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center text-xl\'>{{ r.emoji }}</div>'">
-          </div>
-
-          <!-- Info -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap mb-0.5">
-              <span class="font-bold text-sm" style="color:var(--purple-deep)">{{ r.label }}</span>
-              <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">
-                {{ r.confidence }}% yakin
-              </span>
+        <div class="card-hist" style="flex-direction:column;align-items:stretch;gap:0;">
+          <div class="flex gap-3">
+            <!-- No + Foto -->
+            <div class="flex-shrink-0 flex flex-col items-center gap-1">
+              <span class="text-[10px] font-black" style="color:var(--text-soft)">{{ loop.index }}</span>
+              <div class="w-14 h-14 rounded-xl overflow-hidden border-2 cursor-pointer"
+                   style="border-color:{{ r.color }}44;background:{{ r.color }}10"
+                   onclick="openDetailModal('{{ r.id }}')">
+                <img src="/predictions/{{ r.id }}/image"
+                     alt="{{ r.label }}"
+                     class="w-full h-full object-cover"
+                     onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center text-xl\'>{{ r.emoji }}</div>'">
+              </div>
             </div>
-            <p class="text-xs truncate" style="color:var(--text-soft)">{{ r.description }}</p>
-            <button onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')"
-                    class="mt-1 text-[11px] font-semibold hover:opacity-70 transition-opacity"
-                    style="color:var(--purple-mid)">
-              🔍 Lihat foto →
-            </button>
-          </div>
 
-          <!-- Confidence mini bar (desktop only) -->
-          <div class="hidden md:block w-28 flex-shrink-0">
-            <div class="h-1.5 rounded-full overflow-hidden" style="background:var(--purple-pale)">
-              <div class="h-full rounded-full" style="width:{{ r.confidence }}%;background:{{ r.color }}"></div>
+            <!-- Info -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-2">
+                <span class="font-bold text-sm leading-tight" style="color:var(--purple-deep)">{{ r.label }}</span>
+                <div class="text-right flex-shrink-0 pl-2">
+                  <p class="text-[11px] font-semibold whitespace-nowrap" style="color:var(--text-mid)">
+                    {{ r.created_at.strftime('%d %b %Y') if r.created_at else '-' }}
+                  </p>
+                  <p class="text-[10px] whitespace-nowrap" style="color:var(--text-soft)">
+                    {{ r.created_at.strftime('%H:%M') if r.created_at else '' }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5 flex-wrap mt-1">
+                <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">
+                  {{ r.confidence }}% yakin
+                </span>
+                {% if r.doctor_notes %}
+                <span class="badge-conf" style="background:var(--purple-pale);color:var(--purple-mid)">
+                  🩺 {{ r.doctor_notes|length }} catatan
+                </span>
+                {% endif %}
+                {% if r.need_visit %}
+                <span class="badge-conf" style="background:#fde8e8;color:#c0392b">
+                  🏥 Perlu kunjungan
+                </span>
+                {% endif %}
+              </div>
+
+              <p class="text-xs mt-1.5 line-clamp-2" style="color:var(--text-soft)">{{ r.description }}</p>
+
+              <button onclick="openDetailModal('{{ r.id }}')"
+                      class="mt-1.5 text-[11px] font-semibold hover:opacity-70 transition-opacity"
+                      style="color:var(--purple-mid)">
+                📄 Lihat detail →
+              </button>
             </div>
-            <p class="text-[10px] mt-1 text-right font-semibold" style="color:var(--text-soft)">{{ r.confidence }}%</p>
-          </div>
-
-          <!-- Date -->
-          <div class="text-right flex-shrink-0">
-            <p class="text-xs font-semibold" style="color:var(--text-mid)">
-              {{ r.created_at.strftime('%d %b %Y') if r.created_at else '-' }}
-            </p>
-            <p class="text-[10px]" style="color:var(--text-soft)">
-              {{ r.created_at.strftime('%H:%M') if r.created_at else '' }}
-            </p>
           </div>
         </div>
         {% endfor %}
       </div>
     </div>
 
-    <!-- Modal preview gambar -->
-    <div id="img-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+    <!-- Modal Detail Riwayat -->
+    <div id="detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
          style="background:rgba(26,17,40,0.75);backdrop-filter:blur(6px)"
-         onclick="closeImageModal()">
-      <div class="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-2xl" onclick="event.stopPropagation()">
+         onclick="closeDetailModal()">
+      <div class="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col" style="max-height:88vh;background:#fff" onclick="event.stopPropagation()">
         <!-- Header modal -->
-        <div class="flex items-center justify-between px-5 py-4" id="modal-header" style="background:var(--purple-deep)">
+        <div class="flex items-center justify-between px-5 py-4 flex-shrink-0" id="modal-header" style="background:var(--purple-deep)">
           <div>
             <p class="font-bold text-white text-sm" id="modal-label">—</p>
             <p class="text-xs text-white" id="modal-conf">—</p>
           </div>
-          <button onclick="closeImageModal()" class="text-white opacity-60 hover:opacity-100 text-xl font-bold">✕</button>
+          <button onclick="closeDetailModal()" class="text-white opacity-60 hover:opacity-100 text-xl font-bold">✕</button>
         </div>
-        <!-- Gambar -->
-        <div style="background:#1a1128">
-          <img id="modal-img" src="" alt="Preview" class="w-full object-contain" style="max-height:70vh">
+
+        <!-- Body (scrollable) -->
+        <div class="overflow-y-auto">
+          <!-- Gambar -->
+          <div style="background:#1a1128">
+            <img id="modal-img" src="" alt="Preview" class="w-full object-contain" style="max-height:40vh">
+          </div>
+
+          <div class="p-5 space-y-5">
+            <!-- Deskripsi & saran penanganan -->
+            <div>
+              <span class="eyebrow mb-2">🩻 Info Kondisi</span>
+              <p class="text-sm mt-2 leading-relaxed" id="modal-description" style="color:var(--text-dark)">—</p>
+              <ul id="modal-advice" class="mt-2 space-y-1 list-disc list-inside"></ul>
+            </div>
+
+            <!-- Catatan dokter -->
+            <div id="modal-notes-wrap">
+              <span class="eyebrow mb-2">🩺 Catatan Dokter</span>
+              <div id="modal-notes" class="mt-2 space-y-2"></div>
+            </div>
+
+            <!-- Notifikasi perlu kunjungan + info klinik -->
+            <div id="modal-visit-alert" class="hidden rounded-xl p-4" style="background:#fdeceb;border:1px solid #f3b9b3">
+              <p class="text-sm font-bold mb-2" style="color:#c0392b">🏥 Dokter menyarankan kunjungan langsung ke klinik</p>
+              <p class="text-xs font-semibold" style="color:var(--text-dark)">{{ clinic.name }}</p>
+              <p class="text-xs mt-1" style="color:var(--text-mid)">
+                <a href="{{ clinic.phone_wa_link }}" target="_blank" class="font-semibold hover:opacity-70" style="color:var(--purple-mid)">{{ clinic.phone }}</a>
+                · {{ clinic.address }}
+              </p>
+              <div class="mt-2">
+                {% for h in clinic.hours %}
+                <p class="text-[11px]" style="color:var(--text-mid)"><span class="font-semibold">{{ h.days }}:</span> {{ h.time }}</p>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Klinik -->
+    <div class="chart-card mt-8 afu afu-d4">
+      <span class="eyebrow mb-3">🏥 Butuh Konsultasi Langsung?</span>
+      <p class="serif text-xl font-bold mt-2 mb-4" style="color:var(--purple-deep)">{{ clinic.name }}</p>
+      <div class="grid sm:grid-cols-3 gap-4">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:var(--text-soft)">Telepon / WhatsApp</p>
+          <a href="{{ clinic.phone_wa_link }}" target="_blank" class="text-sm font-semibold hover:opacity-70" style="color:var(--purple-mid)">{{ clinic.phone }}</a>
+        </div>
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:var(--text-soft)">Alamat</p>
+          <p class="text-sm" style="color:var(--text-mid)">{{ clinic.address }}</p>
+        </div>
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:var(--text-soft)">Jam Operasional</p>
+          {% for h in clinic.hours %}
+          <p class="text-xs" style="color:var(--text-mid)"><span class="font-semibold">{{ h.days }}:</span> {{ h.time }}</p>
+          {% endfor %}
         </div>
       </div>
     </div>
@@ -437,6 +501,15 @@
         Mulai analisis pertama Anda dan hasilnya akan tersimpan di sini secara otomatis.
       </p>
       <a href="/#analyze" class="btn-gold px-8 py-3.5 rounded-2xl inline-block text-sm">🔬 Mulai Analisis Pertama</a>
+    </div>
+
+    <div class="chart-card mt-8 afu max-w-2xl mx-auto text-center">
+      <span class="eyebrow mb-3">🏥 Butuh Konsultasi Langsung?</span>
+      <p class="serif text-xl font-bold mt-2 mb-2" style="color:var(--purple-deep)">{{ clinic.name }}</p>
+      <p class="text-sm mb-1" style="color:var(--text-mid)">
+        <a href="{{ clinic.phone_wa_link }}" target="_blank" class="font-semibold hover:opacity-70" style="color:var(--purple-mid)">{{ clinic.phone }}</a>
+        · {{ clinic.address }}
+      </p>
     </div>
 
     {% endif %}
@@ -465,32 +538,109 @@ document.addEventListener('click', e => {
   }
 });
 
-/* ── Modal preview gambar ── */
-function openImageModal(imageUrl, label, confidence, color) {
-  const modal      = document.getElementById('img-modal');
+/* ── Modal Detail Riwayat ── */
+function openDetailModal(id) {
+  const rec = RECORD_DETAILS[id];
+  if (!rec) return;
+
+  const modal      = document.getElementById('detail-modal');
   const modalImg    = document.getElementById('modal-img');
   const modalLabel  = document.getElementById('modal-label');
   const modalConf   = document.getElementById('modal-conf');
   const modalHeader = document.getElementById('modal-header');
+  const modalDesc   = document.getElementById('modal-description');
+  const modalAdvice = document.getElementById('modal-advice');
+  const modalNotesWrap = document.getElementById('modal-notes-wrap');
+  const modalNotes  = document.getElementById('modal-notes');
+  const modalAlert  = document.getElementById('modal-visit-alert');
 
-  modalImg.src = imageUrl;
-  modalLabel.textContent = label;
-  modalConf.textContent = confidence + '% yakin';
-  if (color) modalHeader.style.background = color;
+  modalImg.src = '/predictions/' + id + '/image';
+  modalLabel.textContent = rec.label;
+  modalConf.textContent = rec.confidence + '% yakin · ' + rec.created_at;
+  if (rec.color) modalHeader.style.background = rec.color;
+
+  modalDesc.textContent = rec.description || '-';
+
+  modalAdvice.innerHTML = '';
+  (rec.advice || []).forEach(a => {
+    const li = document.createElement('li');
+    li.className = 'text-xs leading-relaxed';
+    li.style.color = 'var(--text-mid)';
+    li.textContent = a;
+    modalAdvice.appendChild(li);
+  });
+
+  if (rec.notes && rec.notes.length > 0) {
+    modalNotesWrap.classList.remove('hidden');
+    modalNotes.innerHTML = '';
+    rec.notes.forEach(n => {
+      const div = document.createElement('div');
+      div.className = 'rounded-lg p-3';
+      div.style.background = 'var(--gold-pale)';
+      div.style.border = '1px solid rgba(212,168,67,0.3)';
+      div.innerHTML = `
+        <p class="text-xs leading-relaxed" style="color:var(--text-dark)">🩺 ${escapeHtml(n.note)}</p>
+        <p class="text-[10px] mt-1 font-semibold" style="color:var(--text-soft)">dr. ${escapeHtml(n.doctor_name)} · ${escapeHtml(n.created_at)}</p>
+      `;
+      modalNotes.appendChild(div);
+    });
+  } else {
+    modalNotesWrap.classList.add('hidden');
+  }
+
+  modalAlert.classList.toggle('hidden', !rec.need_visit);
 
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 }
 
-function closeImageModal() {
-  document.getElementById('img-modal').classList.add('hidden');
+function closeDetailModal() {
+  document.getElementById('detail-modal').classList.add('hidden');
   document.body.style.overflow = '';
 }
 
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : str;
+  return div.innerHTML;
+}
+
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeImageModal();
+  if (e.key === 'Escape') closeDetailModal();
 });
 </script>
+
+{% if records %}
+<script>
+/* ══════════════════════════════════════════════
+   DETAIL RIWAYAT (untuk modal) — dari Jinja2
+══════════════════════════════════════════════ */
+const RECORD_DETAILS = {
+  {% for r in records %}
+  "{{ r.id }}": {
+    label: {{ r.label|tojson }},
+    confidence: {{ r.confidence }},
+    color: {{ r.color|tojson }},
+    emoji: {{ r.emoji|tojson }},
+    description: {{ r.description|tojson }},
+    advice: {{ r.advice|tojson }},
+    created_at: {{ (r.created_at.strftime('%d %b %Y, %H:%M') if r.created_at else '-')|tojson }},
+    need_visit: {{ 'true' if r.need_visit else 'false' }},
+    notes: [
+      {% for n in r.doctor_notes %}
+      {
+        note: {{ n.note|tojson }},
+        doctor_name: {{ n.doctor_name|tojson }},
+        created_at: {{ (n.created_at.strftime('%d %b %Y, %H:%M') if n.created_at else '-')|tojson }},
+        need_visit: {{ 'true' if n.need_visit else 'false' }}
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+};
+</script>
+{% endif %}
 
 {% if records %}
 <script>

@@ -19,7 +19,7 @@
     .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
     .sidebar-link.active { background:var(--purple-mid); color:#fff; }
     .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
-    .badge-conf { display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; }
+    .badge-conf { display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; white-space:nowrap; }
     .section-badge { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:4px 10px; border-radius:99px; background:var(--purple-pale); color:var(--purple-mid); margin-bottom:12px; }
     .kpi-mini { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:14px; padding:16px 20px; }
   </style>
@@ -109,39 +109,98 @@
       <h3 class="font-bold text-base mb-4" style="color:var(--purple-deep)">Semua Riwayat Prediksi</h3>
       <div class="space-y-4">
         {% for r in records %}
-        <div class="flex gap-4 p-4 rounded-xl transition-all hover:shadow-sm" style="background:var(--cream)">
+        <div id="record-{{ r.id }}" class="p-4 rounded-xl transition-all hover:shadow-sm" style="background:var(--cream)">
+          <div class="flex gap-3">
 
-          <!-- Foto hasil deteksi -->
-          <div class="flex-shrink-0">
-            <div class="w-20 h-20 rounded-xl overflow-hidden border-2 cursor-pointer"
-                 style="border-color:{{ r.color }}44;background:{{ r.color }}10"
-                 onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')">
-              <img src="/predictions/{{ r.id }}/image"
-                   alt="{{ r.label }}"
-                   class="w-full h-full object-cover"
-                   onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center text-2xl\'>{{ r.emoji }}</div>'">
+            <!-- Foto hasil deteksi -->
+            <div class="flex-shrink-0">
+              <div class="w-16 h-16 rounded-xl overflow-hidden border-2 cursor-pointer"
+                   style="border-color:{{ r.color }}44;background:{{ r.color }}10"
+                   onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')">
+                <img src="/predictions/{{ r.id }}/image"
+                     alt="{{ r.label }}"
+                     class="w-full h-full object-cover"
+                     onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center text-2xl\'>{{ r.emoji }}</div>'">
+              </div>
+            </div>
+
+            <!-- Info -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+                  <span class="text-base flex-shrink-0">{{ r.emoji }}</span>
+                  <span class="font-bold text-sm leading-tight" style="color:var(--purple-deep)">{{ r.label }}</span>
+                </div>
+                <div class="text-right flex-shrink-0 pl-2">
+                  <p class="text-[11px] font-semibold whitespace-nowrap" style="color:var(--text-mid)">{{ r.created_at[:10] if r.created_at else '-' }}</p>
+                  <p class="text-[10px] whitespace-nowrap" style="color:var(--text-soft)">{{ r.created_at[11:16] if r.created_at else '' }}</p>
+                </div>
+              </div>
+              <span class="badge-conf mt-1 inline-block" style="background:{{ r.color }}18;color:{{ r.color }}">{{ r.confidence }}% yakin</span>
+              <p class="text-xs leading-relaxed mt-1.5" style="color:var(--text-soft)">{{ r.description }}</p>
+              {% if r.advice %}
+              <details class="mt-2">
+                <summary class="text-xs font-semibold cursor-pointer select-none" style="color:var(--purple-mid)">📋 Lihat info & saran penanganan lengkap</summary>
+                <ul class="mt-2 space-y-1 list-disc list-inside">
+                  {% for a in r.advice %}
+                  <li class="text-xs leading-relaxed" style="color:var(--text-mid)">{{ a }}</li>
+                  {% endfor %}
+                </ul>
+              </details>
+              {% endif %}
+              <button onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')"
+                      class="mt-2 text-xs font-semibold hover:opacity-70 transition-opacity"
+                      style="color:var(--purple-mid)">
+                🔍 Lihat foto →
+              </button>
             </div>
           </div>
 
-          <!-- Info -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap mb-1">
-              <span class="text-xl">{{ r.emoji }}</span>
-              <span class="font-bold text-sm" style="color:var(--purple-deep)">{{ r.label }}</span>
-              <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">{{ r.confidence }}% yakin</span>
-            </div>
-            <p class="text-xs leading-relaxed" style="color:var(--text-soft)">{{ r.description }}</p>
-            <button onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')"
-                    class="mt-2 text-xs font-semibold hover:opacity-70 transition-opacity"
-                    style="color:var(--purple-mid)">
-              🔍 Lihat foto →
-            </button>
-          </div>
+          <!-- Catatan Dokter -->
+          <div class="mt-3 pl-1" style="border-left:2px solid rgba(212,168,67,0.4)">
+            <div class="pl-3 space-y-2">
+              {% for n in r.doctor_notes %}
+              <div class="rounded-lg p-3" style="background:#fff;border:1px solid rgba(212,168,67,0.2)">
+                <div class="flex items-start justify-between gap-2">
+                  <p class="text-xs leading-relaxed flex-1" style="color:var(--text-dark)">📝 {{ n.note }}</p>
+                  <form method="post" action="/dokter/notes/{{ n.id }}/delete" onsubmit="return confirm('Hapus catatan ini?')">
+                    <input type="hidden" name="patient_id" value="{{ patient.id }}">
+                    <button type="submit" class="text-[10px] font-bold hover:opacity-70 flex-shrink-0" style="color:#e05252">✕</button>
+                  </form>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap mt-1">
+                  <p class="text-[10px] font-semibold" style="color:var(--text-soft)">
+                    dr. {{ n.doctor_name }} · {{ n.created_at }}
+                  </p>
+                  {% if n.need_visit %}
+                  <span class="badge-conf" style="background:#fde8e8;color:#c0392b">🏥 Perlu kunjungan klinik</span>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
 
-          <!-- Tanggal -->
-          <div class="text-right text-xs flex-shrink-0 pt-1" style="color:var(--text-soft)">
-            {{ r.created_at[:10] if r.created_at else '-' }}<br/>
-            {{ r.created_at[11:16] if r.created_at else '' }}
+              <!-- Toggle form tambah catatan -->
+              <button type="button" onclick="toggleNoteForm({{ r.id }})"
+                      class="text-xs font-semibold hover:opacity-70 transition-opacity"
+                      style="color:var(--purple-mid)">
+                ✏️ Tambah Catatan
+              </button>
+              <form id="note-form-{{ r.id }}" method="post"
+                    action="/dokter/patients/{{ patient.id }}/notes/{{ r.id }}"
+                    class="hidden mt-2 space-y-2">
+                <textarea name="note" rows="2" required placeholder="Tulis catatan medis untuk riwayat ini..."
+                          class="w-full text-xs rounded-lg p-2 border focus:outline-none"
+                          style="border-color:rgba(212,168,67,0.35);color:var(--text-dark)"></textarea>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <label class="flex items-start gap-2 text-xs font-semibold" style="color:var(--text-mid)">
+                    <input type="checkbox" name="need_visit" value="1" class="rounded mt-0.5 flex-shrink-0">
+                    <span>🏥 Sarankan pasien berkunjung ke klinik</span>
+                  </label>
+                  <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0 self-end sm:self-auto"
+                          style="background:var(--purple-mid);color:#fff">Simpan</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
         {% else %}
@@ -207,6 +266,16 @@
     const modal = document.getElementById('img-modal');
     modal.classList.add('hidden');
     document.body.style.overflow = '';
+  }
+
+  // ── Toggle form tambah catatan dokter ───────────────────────────────────
+  function toggleNoteForm(recordId) {
+    const form = document.getElementById('note-form-' + recordId);
+    if (!form) return;
+    form.classList.toggle('hidden');
+    if (!form.classList.contains('hidden')) {
+      form.querySelector('textarea').focus();
+    }
   }
 
   // Tutup modal dengan tombol Escape

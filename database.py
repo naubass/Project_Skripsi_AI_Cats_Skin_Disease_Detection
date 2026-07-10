@@ -16,13 +16,51 @@ DB_CONFIG = {
     "user"    : os.getenv("DB_USER",     "root"),
     "password": os.getenv("DB_PASSWORD", ""),
     "database": os.getenv("DB_NAME",     "catskindisease"),
+    # PENTING: tanpa connect_timeout, mysql.connector bisa hang TANPA BATAS
+    # WAKTU dan TANPA ERROR kalau host tidak merespon (umum terjadi dengan
+    # proxy publik seperti Railway TCP proxy yang sesekali lambat/hang dari
+    # luar jaringannya). Timeout pendek di sini dikombinasikan dengan retry
+    # di _connect_with_retry() supaya total waktu tunggu tetap terbatas,
+    # dan kalau gagal kamu dapat error jelas, bukan startup yang diam.
+    "connect_timeout": 5,
 }
 
-# ── Koneksi ───────────────────────────────────────────────────────────────────
+# ── Koneksi dengan retry ─────────────────────────────────────────────────────────
+def _connect_with_retry(config: dict, max_retries: int = 3, delay: int = 3):
+    """
+    Connect ke MySQL dengan retry. Railway (dan proxy publik sejenis) kadang
+    mengalami koneksi pertama yang hang/lambat dari luar jaringannya sendiri.
+    Daripada bergantung pada satu kali percobaan, kita coba beberapa kali
+    dengan connect_timeout pendek per percobaan (lihat DB_CONFIG) — supaya
+    prosesnya lebih cepat ketahuan gagal/berhasil, bukan diam lama.
+
+    CATATAN: sengaja TIDAK menambahkan ThreadPoolExecutor/nested-thread di
+    sini untuk membatasi waktu connect secara manual. mysql.connector punya
+    native C extension, dan menjalankannya di dalam thread bersarang
+    (apalagi saat dipanggil dari background thread lain seperti init_db())
+    berisiko memicu segfault akibat konflik native code — ini yang terjadi
+    sebelumnya. connect_timeout di level driver sudah cukup selama urutan
+    import di app.py benar (mysql.connector diimpor sebelum numpy/tensorflow).
+    """
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"[DB] Percobaan koneksi #{attempt}/{max_retries}...")
+            conn = mysql.connector.connect(**config)
+            print(f"[DB] Percobaan #{attempt} berhasil.")
+            return conn
+        except Error as e:
+            last_error = e
+            print(f"[DB] Percobaan #{attempt} gagal: {e}")
+            if attempt < max_retries:
+                import time
+                time.sleep(delay)
+    raise last_error
+
+
 def get_db() -> mysql.connector.MySQLConnection:
     """Return satu koneksi MySQL baru (caller harus .close() sendiri)."""
-    conn = mysql.connector.connect(**DB_CONFIG)
-    return conn
+    return _connect_with_retry(DB_CONFIG)
 
 
 # ── Disease info default (dipakai untuk seed pertama kali saja) ───────────────
@@ -86,25 +124,63 @@ DEFAULT_DISEASE_INFO = [
 ]
 
 
-# ── Init Tabel ────────────────────────────────────────────────────────────────
+# ── Info klinik Sakti Pet Care (statis, dipakai di halaman riwayat) ───────────
+CLINIC_INFO = {
+    "name": "Sakti Pet Care",
+    "phone": "0852-1132-2390",
+    "phone_wa_link": "https://wa.me/6285211322390",
+    "address": "Blok K2 No 11A, Jl. Binong Permai, Sukabakti, Kec. Curug, Kabupaten Tangerang, Banten 15810",
+    "hours": [
+        {"days": "Senin–Rabu, Sabtu–Minggu", "time": "09.00–21.00"},
+        {"days": "Kamis", "time": "09.00–17.00"},
+        {"days": "Jumat", "time": "09.00–11.00, 14.00–21.00 (istirahat siang)"},
+    ],
+}
+
+
+def get_clinic_info() -> dict:
+    """Return info kontak & jam operasional klinik (statis)."""
+    return CLINIC_INFO
+
+
+# ── Init Tabel ──────────────────────────────────────────────────────────────────
 def init_db():
     """Buat database & tabel bila belum ada."""
+    print("[DB] Memulai init_db()...")
+    print(f"[DB] Target koneksi: host={DB_CONFIG['host']} port={DB_CONFIG['port']} db={DB_CONFIG['database']}")
+
     cfg_no_db = {k: v for k, v in DB_CONFIG.items() if k != "database"}
     try:
-        conn = mysql.connector.connect(**cfg_no_db)
+        print("[DB] Menghubungkan ke server MySQL (tanpa database) untuk CREATE DATABASE...")
+        conn = _connect_with_retry(cfg_no_db)
+        print("[DB] Koneksi server berhasil. Membuat database jika belum ada...")
         cursor = conn.cursor()
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{DB_CONFIG['database']}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
         conn.commit()
         cursor.close()
         conn.close()
+        print("[DB] Database OK.")
     except Error as e:
         print(f"[DB] Gagal membuat database: {e}")
         return
 
     try:
+        print("[DB] Menghubungkan ke database aplikasi...")
         conn = get_db()
         cursor = conn.cursor()
+        print("[DB] Koneksi database aplikasi berhasil.")
 
+        # Batasi waktu tunggu metadata lock — supaya kalau ada koneksi lama
+        # yang masih memegang lock di tabel (misal dari proses sebelumnya
+        # yang tidak tertutup rapi saat container restart/redeploy),
+        # ALTER TABLE tidak hang selamanya tanpa pesan error sama sekali.
+        # Default MySQL bisa menunggu lock dalam waktu yang sangat lama.
+        try:
+            cursor.execute("SET SESSION lock_wait_timeout = 10")
+        except Error as e:
+            print(f"[DB] Tidak bisa set lock_wait_timeout: {e}")
+
+        print("[DB] Membuat/memeriksa tabel users...")
         # ── Tabel users (role ditambah 'dokter') ──────────────────────────
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -118,18 +194,28 @@ def init_db():
                 created_at    DATETIME             NOT NULL DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
+        conn.commit()
+        print("[DB] Tabel users OK. Menjalankan migrasi kolom (jika perlu)...")
 
-        # Migrasi: kalau tabel users sudah ada dari versi lama (role tanpa 'dokter'
-        # atau tanpa kolom is_active), tambahkan secara aman.
+        # Migrasi: kalau tabel users sudah ada dari versi lama (role tanpa
+        # 'dokter' atau tanpa kolom is_active), tambahkan secara aman.
+        # Setiap ALTER di-commit sendiri & errornya dicetak (bukan di-pass
+        # diam-diam) supaya kalau memang gagal/timeout, kelihatan di log
+        # alih-alih bikin proses terlihat "stuck tanpa error".
         try:
             cursor.execute("ALTER TABLE users MODIFY COLUMN role ENUM('user','admin','dokter') NOT NULL DEFAULT 'user'")
-        except Error:
-            pass
+            conn.commit()
+            print("[DB] Migrasi kolom role selesai.")
+        except Error as e:
+            print(f"[DB] Migrasi kolom role dilewati ({e}).")
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1")
-        except Error:
-            pass
+            conn.commit()
+            print("[DB] Migrasi kolom is_active selesai.")
+        except Error as e:
+            print(f"[DB] Migrasi kolom is_active dilewati ({e}).")
 
+        print("[DB] Membuat/memeriksa tabel disease_info...")
         # ── Tabel disease_info (pengganti hardcode DISEASE_INFO) ──────────
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS disease_info (
@@ -145,7 +231,10 @@ def init_db():
                 FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
+        conn.commit()
+        print("[DB] Tabel disease_info OK.")
 
+        print("[DB] Membuat/memeriksa tabel predictions...")
         # ── Tabel predictions ──────────────────────────────────────────────
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS predictions (
@@ -159,7 +248,10 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
+        conn.commit()
+        print("[DB] Tabel predictions OK.")
 
+        print("[DB] Membuat/memeriksa tabel activity_logs...")
         # ── Tabel activity_logs (log aktivitas dasar untuk admin) ─────────
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS activity_logs (
@@ -171,13 +263,42 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
-
         conn.commit()
+        print("[DB] Tabel activity_logs OK.")
+
+        print("[DB] Membuat/memeriksa tabel doctor_notes...")
+        # ── Tabel doctor_notes (catatan dokter ke riwayat prediksi user) ──
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS doctor_notes (
+                id             INT AUTO_INCREMENT PRIMARY KEY,
+                prediction_id  INT          NOT NULL,
+                doctor_id      INT          NOT NULL,
+                note           TEXT         NOT NULL,
+                need_visit     TINYINT(1)   NOT NULL DEFAULT 0,
+                created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE,
+                FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        conn.commit()
+        print("[DB] Tabel doctor_notes OK.")
+
+        # Migrasi: kalau tabel doctor_notes sudah ada dari versi sebelum
+        # kolom need_visit ditambahkan, tambahkan secara aman (sama seperti
+        # pola migrasi kolom is_active di atas).
+        try:
+            cursor.execute("ALTER TABLE doctor_notes ADD COLUMN need_visit TINYINT(1) NOT NULL DEFAULT 0")
+            conn.commit()
+            print("[DB] Migrasi kolom need_visit selesai.")
+        except Error as e:
+            print(f"[DB] Migrasi kolom need_visit dilewati ({e}).")
 
         # ── Seed disease_info kalau masih kosong ──────────────────────────
         cursor.execute("SELECT COUNT(*) FROM disease_info")
         count = cursor.fetchone()[0]
         if count == 0:
+            print("[DB] disease_info kosong, melakukan seed data default...")
             for d in DEFAULT_DISEASE_INFO:
                 cursor.execute(
                     """INSERT INTO disease_info
@@ -223,7 +344,7 @@ def get_disease_info_dict() -> dict:
         conn.close()
 
 
-# ── Helper: catat log aktivitas ──────────────────────────────────────────────
+# ── Helper: catat log aktivitas ───────────────────────────────────────────────
 def log_activity(user_id, action: str, detail: str = None):
     """
     Catat aktivitas dasar user ke tabel activity_logs.
@@ -242,3 +363,66 @@ def log_activity(user_id, action: str, detail: str = None):
         conn.close()
     except Error as e:
         print(f"[DB] Gagal mencatat log aktivitas: {e}")
+
+
+# ── Helper: catatan dokter pada riwayat prediksi ──────────────────────────────
+def add_doctor_note(prediction_id: int, doctor_id: int, note: str, need_visit: bool = False) -> int:
+    """Simpan catatan dokter untuk satu record prediksi. Return id catatan baru."""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO doctor_notes (prediction_id, doctor_id, note, need_visit, created_at) VALUES (%s, %s, %s, %s, %s)",
+            (prediction_id, doctor_id, note, 1 if need_visit else 0, __import__("datetime").datetime.now())
+        )
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def delete_doctor_note(note_id: int, doctor_id: int) -> bool:
+    """Hapus catatan dokter. Hanya dokter pemilik catatan yang boleh menghapus."""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM doctor_notes WHERE id = %s AND doctor_id = %s",
+            (note_id, doctor_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_doctor_notes_for_predictions(prediction_ids: list) -> dict:
+    """
+    Ambil semua catatan dokter untuk sekumpulan prediction_id sekaligus,
+    dikelompokkan per prediction_id (list terurut dari yang terbaru).
+    Return: { prediction_id: [ {id, note, doctor_name, created_at}, ... ] }
+    """
+    result = {}
+    if not prediction_ids:
+        return result
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        placeholders = ", ".join(["%s"] * len(prediction_ids))
+        cursor.execute(
+            f"""SELECT dn.id, dn.prediction_id, dn.note, dn.need_visit, dn.created_at, u.name AS doctor_name
+                FROM doctor_notes dn
+                JOIN users u ON dn.doctor_id = u.id
+                WHERE dn.prediction_id IN ({placeholders})
+                ORDER BY dn.created_at DESC""",
+            tuple(prediction_ids)
+        )
+        for row in cursor.fetchall():
+            row["need_visit"] = bool(row["need_visit"])
+            result.setdefault(row["prediction_id"], []).append(row)
+        return result
+    finally:
+        cursor.close()
+        conn.close()

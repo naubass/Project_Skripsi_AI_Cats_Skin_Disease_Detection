@@ -1,43 +1,93 @@
 import os
 import io
+import asyncio
+
+os.environ["TFLITE_DISABLE_XNNPACK"] = "1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+import mysql.connector  
+from database import (
+    get_db, init_db, get_disease_info_dict, log_activity,
+    get_clinic_info, add_doctor_note, delete_doctor_note,
+    get_doctor_notes_for_predictions,
+)
+from auth import hash_password, verify_password
+
 import numpy as np
 from PIL import Image
 import tensorflow as tf
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from tensorflow.keras.applications.resnet50 import preprocess_input
 from starlette.middleware.sessions import SessionMiddleware
 from datetime import datetime, timedelta
-import base64
-from fastapi.responses import Response
-from database import get_db, init_db, get_disease_info_dict, log_activity
-from auth import hash_password, verify_password
-from rag import ask as rag_ask, build_index
+from rag import build_index
+
+def rag_ask(query):
+    from rag import ask
+    return ask(query)
+
+def rag_build_index():
+    from rag import build_index
+    return build_index()
 
 app = FastAPI(title="Sakti Pet Care - CatSkin AI | Klasifikasi Penyakit Kulit Kucing")
 
-# ── Session Middleware ─────────────────────────────────────────────────────────
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "sakti-petcare-secret-2026"))
-templates = Jinja2Templates(directory="templates")
 
-# Mount folder assets agar dibaca sebagai URL path '/assets'
+templates = Jinja2Templates(directory="templates")
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
-MODEL_PATH  = "model_terbaik.keras"
+MODEL_PATH  = "model_terbaik.tflite"
 IMG_SIZE    = (224, 224)
 CLASS_NAMES = ["Flea_Allergy", "Health", "Ringworm", "Scabies"]
 
-print("Loading model...")
-model = tf.keras.models.load_model(MODEL_PATH)
-print("Model loaded!")
+# ── Load TFLite model SEKALI saja ───────────────────────────────────────────────
+print("Loading TFLite model...")
+interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+interpreter.allocate_tensors()
+input_details  = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+print("TFLite model loaded!")
+
+
+# ── Status DB global, supaya endpoint lain bisa cek tanpa nge-block ────────────
+db_ready = False
+db_init_error = None
+
 
 @app.on_event("startup")
 async def startup():
-    init_db()
-    from rag import load_index
-    load_index()
+    """
+    init_db() dipanggil langsung (bukan di background thread terpisah).
+    Setelah root cause segfault (urutan import numpy/tensorflow sebelum
+    mysql.connector) diperbaiki, dan koneksi DB sudah punya connect_timeout
+    + retry yang wajar (lihat database.py), init_db() seharusnya selesai
+    dalam hitungan detik, bukan menggantung. Menjalankannya langsung di sini
+    (bukan background thread) juga menghindari risiko native-code conflict
+    tambahan dari nested threading.
+    """
+    global db_ready, db_init_error
+    try:
+        init_db()
+        db_ready = True
+        print("[STARTUP] init_db() selesai, db_ready = True")
+    except Exception as e:
+        db_init_error = str(e)
+        print(f"[STARTUP] init_db() gagal: {e}")
+        # Tetap lanjut — jangan biarkan kegagalan DB membuat seluruh
+        # aplikasi tidak bisa start sama sekali. Endpoint yang butuh DB
+        # akan gagal sendiri dengan error yang jelas saat diakses.
+
+
+@app.get("/health")
+async def health_check():
+    """Endpoint sederhana untuk cek status DB tanpa harus login dulu."""
+    return JSONResponse({
+        "db_ready": db_ready,
+        "db_init_error": db_init_error,
+    })
 
 
 def get_current_user(request: Request):
@@ -61,9 +111,20 @@ def preprocess_image(image_bytes: bytes) -> np.ndarray:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = img.resize(IMG_SIZE, Image.BILINEAR)
     img_array = np.array(img, dtype=np.float32)
+    img_array = img_array[..., ::-1]  # RGB -> BGR
+    mean = [103.939, 116.779, 123.68]
+    img_array[..., 0] -= mean[0]
+    img_array[..., 1] -= mean[1]
+    img_array[..., 2] -= mean[2]
     img_array = np.expand_dims(img_array, axis=0)
-    img_array = preprocess_input(img_array)
     return img_array
+
+
+def predict_tflite(img_array: np.ndarray) -> np.ndarray:
+    interpreter.set_tensor(input_details[0]['index'], img_array)
+    interpreter.invoke()
+    output = interpreter.get_tensor(output_details[0]['index'])
+    return output[0]
 
 
 # ══ AUTH ROUTES ════════════════════════════════════════════════════════════════
@@ -97,7 +158,6 @@ async def login_submit(request: Request, email: str = Form(...), password: str =
             "id": user["id"], "name": user["name"], "email": user["email"], "role": user["role"]
         }
         log_activity(user["id"], "login", f"Login sebagai {user['role']}")
-        # Redirect sesuai role
         if user["role"] == "admin":
             return RedirectResponse("/admin", status_code=302)
         elif user["role"] == "dokter":
@@ -134,7 +194,6 @@ async def register_submit(
         if cursor.fetchone():
             return templates.TemplateResponse("register.html", {"request": request, "error": "Email sudah terdaftar. Silakan login."})
         hashed = hash_password(password)
-        # Registrasi publik selalu role 'user' — admin & dokter dibuat lewat panel admin
         cursor.execute(
             "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (%s, %s, %s, %s, %s)",
             (name, email, hashed, "user", datetime.now())
@@ -152,14 +211,13 @@ async def logout(request: Request):
     return RedirectResponse("/login", status_code=302)
 
 
-# ══ MAIN ROUTES (role: user) ═══════════════════════════════════════════════════
+# ══ MAIN ROUTES ════════════════════════════════════════════════════════════════
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
-    # Admin & dokter punya panelnya sendiri, tapi tetap dibolehkan lihat halaman utama jika mau
     return templates.TemplateResponse("index.html", {"request": request, "user": user})
 
 
@@ -175,7 +233,7 @@ async def predict(request: Request, file: UploadFile = File(...)):
 
     image_bytes = await file.read()
     img_array   = preprocess_image(image_bytes)
-    probs       = model.predict(img_array, verbose=0)[0]
+    probs       = predict_tflite(img_array)
     idx         = int(np.argmax(probs))
     predicted_key = CLASS_NAMES[idx]
     confidence    = float(probs[idx]) * 100
@@ -199,11 +257,11 @@ async def predict(request: Request, file: UploadFile = File(...)):
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            """INSERT INTO predictions 
-            (user_id, predicted_class, label, confidence, description, image_data, created_at) 
+            """INSERT INTO predictions
+            (user_id, predicted_class, label, confidence, description, image_data, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (user["id"], predicted_key, info["label"], round(confidence, 2), 
-            info["description"], image_bytes, datetime.now())  # tambah image_bytes
+            (user["id"], predicted_key, info["label"], round(confidence, 2),
+             info["description"], image_bytes, datetime.now())
         )
         db.commit()
         prediction_id = cursor.lastrowid
@@ -220,21 +278,18 @@ async def predict(request: Request, file: UploadFile = File(...)):
         "advice": info["advice"], "all_probs": all_probs, "prediction_id": prediction_id,
     })
 
+
 @app.get("/predictions/{prediction_id}/image")
 async def get_prediction_image(request: Request, prediction_id: int):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401)
-    
+
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # Dokter bisa lihat semua, user hanya miliknya sendiri
         if user["role"] in ("dokter", "admin"):
-            cursor.execute(
-                "SELECT image_data FROM predictions WHERE id = %s", 
-                (prediction_id,)
-            )
+            cursor.execute("SELECT image_data FROM predictions WHERE id = %s", (prediction_id,))
         else:
             cursor.execute(
                 "SELECT image_data FROM predictions WHERE id = %s AND user_id = %s",
@@ -244,10 +299,10 @@ async def get_prediction_image(request: Request, prediction_id: int):
     finally:
         cursor.close()
         db.close()
-    
+
     if not row or not row["image_data"]:
         raise HTTPException(status_code=404, detail="Gambar tidak ditemukan.")
-    
+
     return Response(content=row["image_data"], media_type="image/jpeg")
 
 
@@ -269,62 +324,21 @@ async def history_page(request: Request):
             info = disease_info.get(r["predicted_class"], {})
             r["emoji"] = info.get("emoji", "❓")
             r["color"] = info.get("color", "#888")
+            r["advice"] = info.get("advice", [])
     finally:
         cursor.close()
         db.close()
-    return templates.TemplateResponse("history.html", {"request": request, "user": user, "records": records})
 
+    notes_map = get_doctor_notes_for_predictions([r["id"] for r in records])
+    for r in records:
+        notes = notes_map.get(r["id"], [])
+        r["doctor_notes"] = notes
+        r["need_visit"] = any(n["need_visit"] for n in notes)
 
-# ══ CHATBOT ROUTES ═════════════════════════════════════════════════════════════
-
-@app.get("/chatbot", response_class=HTMLResponse)
-async def chatbot_page(request: Request):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=302)
-    return templates.TemplateResponse("chatbot.html", {"request": request, "user": user})
-
-
-@app.post("/chatbot/ask")
-async def chatbot_ask(request: Request):
-    user = get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Login diperlukan.")
-
-    body = await request.json()
-    query = body.get("query", "").strip()
-
-    if not query:
-        raise HTTPException(status_code=400, detail="Pertanyaan tidak boleh kosong.")
-    if len(query) > 500:
-        raise HTTPException(status_code=400, detail="Pertanyaan terlalu panjang.")
-
-    result = rag_ask(query)
-    log_activity(user["id"], "chatbot", query[:100])
-    return JSONResponse(result)
-
-
-@app.post("/admin/upload-pdf")
-async def upload_pdf(request: Request, file: UploadFile = File(...)):
-    """Endpoint khusus admin untuk upload PDF knowledge base."""
-    user = require_role(request, ["admin"])
-    if not user:
-        raise HTTPException(status_code=403, detail="Hanya admin yang bisa upload PDF.")
-
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="File harus berformat PDF.")
-
-    from pathlib import Path
-    Path("rag_data/pdfs").mkdir(parents=True, exist_ok=True)
-
-    save_path = f"rag_data/pdfs/{file.filename}"
-    contents = await file.read()
-    with open(save_path, "wb") as f:
-        f.write(contents)
-
-    build_index()
-
-    return JSONResponse({"message": f"PDF '{file.filename}' berhasil diupload dan index diperbarui."})
+    return templates.TemplateResponse("history.html", {
+        "request": request, "user": user, "records": records,
+        "clinic": get_clinic_info(),
+    })
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -389,7 +403,6 @@ async def admin_users_page(request: Request):
         cursor.close()
         db.close()
 
-    # ── Fix: konversi datetime ke string agar tojson tidak error ──
     for u in users:
         if u.get("created_at"):
             u["created_at"] = u["created_at"].strftime("%d %b %Y")
@@ -671,7 +684,6 @@ async def dokter_patient_detail(request: Request, patient_id: int):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # SESUDAH — tambahkan konversi datetime sebelum ke template
         cursor.execute("SELECT id, name, email, created_at FROM users WHERE id = %s AND role = 'user'", (patient_id,))
         patient = cursor.fetchone()
         if not patient:
@@ -679,7 +691,6 @@ async def dokter_patient_detail(request: Request, patient_id: int):
             db.close()
             raise HTTPException(status_code=404, detail="Pasien tidak ditemukan.")
 
-        # ── Fix patient datetime ──
         if patient.get("created_at"):
             patient["created_at"] = patient["created_at"].strftime("%d %b %Y")
 
@@ -688,21 +699,82 @@ async def dokter_patient_detail(request: Request, patient_id: int):
             (patient_id,)
         )
         records = cursor.fetchall()
+        prediction_ids = [r["id"] for r in records]
         for r in records:
             info = disease_info.get(r["predicted_class"], {})
             r["emoji"] = info.get("emoji", "❓")
             r["color"] = info.get("color", "#888")
-            # ── Fix records datetime ──
+            r["advice"] = info.get("advice", [])
             if r.get("created_at"):
                 r["created_at"] = r["created_at"].strftime("%Y-%m-%d %H:%M")
     finally:
         cursor.close()
         db.close()
 
+    notes_map = get_doctor_notes_for_predictions(prediction_ids)
+    for r in records:
+        notes = notes_map.get(r["id"], [])
+        for n in notes:
+            if n.get("created_at"):
+                n["created_at"] = n["created_at"].strftime("%d %b %Y, %H:%M")
+        r["doctor_notes"] = notes
+
     return templates.TemplateResponse("dokter/patient_detail.html", {
         "request": request, "user": user, "patient": patient,
         "records": records, "active_page": "patients"
     })
+
+
+@app.post("/dokter/patients/{patient_id}/notes/{prediction_id}")
+async def dokter_add_note(
+    request: Request,
+    patient_id: int,
+    prediction_id: int,
+    note: str = Form(...),
+    need_visit: str = Form(None),
+):
+    """Dokter menambahkan catatan ke satu record riwayat prediksi pasien."""
+    user = require_role(request, ["dokter"])
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    note = note.strip()
+    if not note:
+        return RedirectResponse(f"/dokter/patients/{patient_id}", status_code=302)
+    need_visit_flag = bool(need_visit)
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        # Pastikan prediction_id memang milik pasien ini, supaya dokter
+        # tidak bisa menambah catatan ke record milik pasien lain.
+        cursor.execute(
+            "SELECT id FROM predictions WHERE id = %s AND user_id = %s",
+            (prediction_id, patient_id)
+        )
+        valid = cursor.fetchone()
+    finally:
+        cursor.close()
+        db.close()
+
+    if not valid:
+        raise HTTPException(status_code=404, detail="Riwayat prediksi tidak ditemukan.")
+
+    add_doctor_note(prediction_id, user["id"], note, need_visit_flag)
+    log_activity(user["id"], "doctor_note", f"Menambahkan catatan pada prediksi #{prediction_id}")
+
+    return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)
+
+
+@app.post("/dokter/notes/{note_id}/delete")
+async def dokter_delete_note(request: Request, note_id: int, patient_id: int = Form(...)):
+    """Dokter menghapus catatan miliknya sendiri."""
+    user = require_role(request, ["dokter"])
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    delete_doctor_note(note_id, user["id"])
+    return RedirectResponse(f"/dokter/patients/{patient_id}", status_code=302)
 
 
 @app.get("/dokter/disease-info", response_class=HTMLResponse)
@@ -763,6 +835,57 @@ async def dokter_update_disease_info(
         db.close()
 
     return RedirectResponse(f"/dokter/disease-info?msg=Info '{label}' berhasil diperbarui", status_code=302)
+
+# ══ CHATBOT ROUTES ═════════════════════════════════════════════════════════════
+
+@app.get("/chatbot", response_class=HTMLResponse)
+async def chatbot_page(request: Request):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse("chatbot.html", {"request": request, "user": user})
+
+
+@app.post("/chatbot/ask")
+async def chatbot_ask(request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Login diperlukan.")
+
+    body = await request.json()
+    query = body.get("query", "").strip()
+
+    if not query:
+        raise HTTPException(status_code=400, detail="Pertanyaan tidak boleh kosong.")
+    if len(query) > 500:
+        raise HTTPException(status_code=400, detail="Pertanyaan terlalu panjang.")
+
+    result = rag_ask(query)
+    log_activity(user["id"], "chatbot", query[:100])
+    return JSONResponse(result)
+
+
+@app.post("/admin/upload-pdf")
+async def upload_pdf(request: Request, file: UploadFile = File(...)):
+    """Endpoint khusus admin untuk upload PDF knowledge base."""
+    user = require_role(request, ["admin"])
+    if not user:
+        raise HTTPException(status_code=403, detail="Hanya admin yang bisa upload PDF.")
+
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="File harus berformat PDF.")
+
+    from pathlib import Path
+    Path("rag_data/pdfs").mkdir(parents=True, exist_ok=True)
+
+    save_path = f"rag_data/pdfs/{file.filename}"
+    contents = await file.read()
+    with open(save_path, "wb") as f:
+        f.write(contents)
+
+    build_index()
+
+    return JSONResponse({"message": f"PDF '{file.filename}' berhasil diupload dan index diperbarui."})
 
 
 if __name__ == "__main__":
