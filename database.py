@@ -244,12 +244,24 @@ def init_db():
                 label          VARCHAR(100) NOT NULL,
                 confidence     FLOAT        NOT NULL,
                 description    TEXT         NULL,
+                image_data     LONGBLOB     NULL,
                 created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         conn.commit()
         print("[DB] Tabel predictions OK.")
+
+        # Migrasi: kalau tabel predictions sudah ada dari versi sebelum
+        # kolom image_data ditambahkan (foto hasil deteksi disimpan
+        # langsung di DB sebagai BLOB, dipakai oleh endpoint
+        # /predictions/{id}/image), tambahkan secara aman.
+        try:
+            cursor.execute("ALTER TABLE predictions ADD COLUMN image_data LONGBLOB NULL")
+            conn.commit()
+            print("[DB] Migrasi kolom image_data selesai.")
+        except Error as e:
+            print(f"[DB] Migrasi kolom image_data dilewati ({e}).")
 
         print("[DB] Membuat/memeriksa tabel activity_logs...")
         # ── Tabel activity_logs (log aktivitas dasar untuk admin) ─────────
