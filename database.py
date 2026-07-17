@@ -188,7 +188,7 @@ def init_db():
                 name          VARCHAR(100)        NOT NULL,
                 email         VARCHAR(150) UNIQUE  NOT NULL,
                 password_hash VARCHAR(255)         NOT NULL,
-                role          ENUM('user','admin','dokter') NOT NULL DEFAULT 'user',
+                role          ENUM('user','admin','dokter','owner') NOT NULL DEFAULT 'user',
                 is_active     TINYINT(1)           NOT NULL DEFAULT 1,
                 last_login    DATETIME             NULL,
                 created_at    DATETIME             NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -203,9 +203,9 @@ def init_db():
         # diam-diam) supaya kalau memang gagal/timeout, kelihatan di log
         # alih-alih bikin proses terlihat "stuck tanpa error".
         try:
-            cursor.execute("ALTER TABLE users MODIFY COLUMN role ENUM('user','admin','dokter') NOT NULL DEFAULT 'user'")
+            cursor.execute("ALTER TABLE users MODIFY COLUMN role ENUM('user','admin','dokter','owner') NOT NULL DEFAULT 'user'")
             conn.commit()
-            print("[DB] Migrasi kolom role selesai.")
+            print("[DB] Migrasi kolom role (+owner) selesai.")
         except Error as e:
             print(f"[DB] Migrasi kolom role dilewati ({e}).")
         try:
@@ -263,6 +263,24 @@ def init_db():
         except Error as e:
             print(f"[DB] Migrasi kolom image_data dilewati ({e}).")
 
+        # Migrasi: tandai apakah saran kunjungan klinik pada satu prediksi
+        # sudah dikonfirmasi oleh dokter (lalu otomatis dicatat di
+        # laporan_kunjungan). Dipakai untuk mengubah badge "Perlu kunjungan"
+        # menjadi "Sudah kunjungan" di halaman riwayat pasien (history.html).
+        try:
+            cursor.execute("ALTER TABLE predictions ADD COLUMN visit_confirmed TINYINT(1) NOT NULL DEFAULT 0")
+            conn.commit()
+            print("[DB] Migrasi kolom visit_confirmed selesai.")
+        except Error as e:
+            print(f"[DB] Migrasi kolom visit_confirmed dilewati ({e}).")
+
+        try:
+            cursor.execute("ALTER TABLE predictions ADD COLUMN visit_confirmed_at DATETIME NULL")
+            conn.commit()
+            print("[DB] Migrasi kolom visit_confirmed_at selesai.")
+        except Error as e:
+            print(f"[DB] Migrasi kolom visit_confirmed_at dilewati ({e}).")
+
         print("[DB] Membuat/memeriksa tabel activity_logs...")
         # ── Tabel activity_logs (log aktivitas dasar untuk admin) ─────────
         cursor.execute("""
@@ -305,6 +323,30 @@ def init_db():
             print("[DB] Migrasi kolom need_visit selesai.")
         except Error as e:
             print(f"[DB] Migrasi kolom need_visit dilewati ({e}).")
+
+        print("[DB] Membuat/memeriksa tabel laporan_kunjungan...")
+        # ── Tabel laporan_kunjungan ─────────────────────────────────────────
+        # Dibuat otomatis ketika dokter menekan tombol "Konfirmasi Kunjungan"
+        # pada halaman detail pasien (patient_detail.html), untuk prediksi
+        # yang sebelumnya ditandai need_visit oleh catatan dokter.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS laporan_kunjungan (
+                id                 INT AUTO_INCREMENT PRIMARY KEY,
+                prediction_id      INT          NOT NULL,
+                patient_id         INT          NOT NULL,
+                confirmed_by       INT          NOT NULL,
+                catatan_kunjungan  TEXT         NULL,
+                status             ENUM('terjadwal','selesai','batal') NOT NULL DEFAULT 'terjadwal',
+                visit_date         DATETIME     NULL,
+                created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE,
+                FOREIGN KEY (patient_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (confirmed_by) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        conn.commit()
+        print("[DB] Tabel laporan_kunjungan OK.")
 
         # ── Seed disease_info kalau masih kosong ──────────────────────────
         cursor.execute("SELECT COUNT(*) FROM disease_info")
@@ -405,6 +447,125 @@ def delete_doctor_note(note_id: int, doctor_id: int) -> bool:
         )
         conn.commit()
         return cursor.rowcount > 0
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ── Helper: laporan kunjungan (konfirmasi kunjungan klinik) ──────────────────
+def confirm_visit(prediction_id: int, patient_id: int, doctor_id: int, catatan: str = None) -> int:
+    """
+    Dipanggil saat dokter menekan tombol "Konfirmasi Kunjungan" di halaman
+    detail pasien. Menandai predictions.visit_confirmed = 1 dan membuat satu
+    baris baru di laporan_kunjungan. Return id laporan yang baru dibuat.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        now = __import__("datetime").datetime.now()
+        cursor.execute(
+            "UPDATE predictions SET visit_confirmed = 1, visit_confirmed_at = %s WHERE id = %s",
+            (now, prediction_id)
+        )
+        cursor.execute(
+            """INSERT INTO laporan_kunjungan
+               (prediction_id, patient_id, confirmed_by, catatan_kunjungan, status, created_at)
+               VALUES (%s, %s, %s, %s, 'terjadwal', %s)""",
+            (prediction_id, patient_id, doctor_id, catatan, now)
+        )
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_all_laporan_kunjungan(status: str = None) -> list:
+    """
+    Ambil semua laporan kunjungan (untuk halaman /laporan, diakses dokter &
+    owner), terbaru dulu. Filter opsional berdasarkan status.
+    """
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        base = """
+            SELECT lk.*, u.name AS patient_name, u.email AS patient_email,
+                   d.name AS confirmed_by_name,
+                   p.predicted_class, p.label, p.confidence
+            FROM laporan_kunjungan lk
+            JOIN users u ON lk.patient_id = u.id
+            JOIN users d ON lk.confirmed_by = d.id
+            JOIN predictions p ON lk.prediction_id = p.id
+        """
+        params = ()
+        if status:
+            base += " WHERE lk.status = %s"
+            params = (status,)
+        base += " ORDER BY lk.created_at DESC"
+        cursor.execute(base, params)
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_laporan_kunjungan_by_id(laporan_id: int) -> dict:
+    """Ambil satu laporan kunjungan beserta detail pasien, dokter, dan prediksi terkait."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT lk.*, u.name AS patient_name, u.email AS patient_email,
+                   d.name AS confirmed_by_name,
+                   p.predicted_class, p.label, p.confidence, p.description AS prediction_description
+            FROM laporan_kunjungan lk
+            JOIN users u ON lk.patient_id = u.id
+            JOIN users d ON lk.confirmed_by = d.id
+            JOIN predictions p ON lk.prediction_id = p.id
+            WHERE lk.id = %s
+        """, (laporan_id,))
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def update_laporan_kunjungan_status(laporan_id: int, status: str, visit_date=None) -> bool:
+    """Ubah status laporan kunjungan ('terjadwal' / 'selesai' / 'batal') dan tanggal kunjungan opsional."""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE laporan_kunjungan SET status = %s, visit_date = %s WHERE id = %s",
+            (status, visit_date, laporan_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_pending_recommendations() -> list:
+    """
+    Ambil semua riwayat di mana dokter menyarankan kunjungan (need_visit = 1)
+    TETAPI belum dikonfirmasi kehadirannya di tabel predictions.
+    """
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT dn.id AS note_id, dn.note, dn.created_at AS note_date,
+                   p.id AS prediction_id, p.label, p.confidence,
+                   u.id AS patient_id, u.name AS patient_name, u.email AS patient_email,
+                   d.name AS doctor_name
+            FROM doctor_notes dn
+            JOIN predictions p ON dn.prediction_id = p.id
+            JOIN users u ON p.user_id = u.id
+            JOIN users d ON dn.doctor_id = d.id
+            WHERE dn.need_visit = 1 AND p.visit_confirmed = 0
+            ORDER BY dn.created_at DESC
+        """)
+        return cursor.fetchall()
     finally:
         cursor.close()
         conn.close()

@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from database import (
     get_db, get_disease_info_dict, log_activity,
     add_doctor_note, delete_doctor_note, get_doctor_notes_for_predictions,
+    confirm_visit,
 )
 from core.state import templates
 from core.dependencies import require_role
@@ -151,7 +152,9 @@ async def dokter_patient_detail(request: Request, patient_id: int):
             patient["created_at"] = patient["created_at"].strftime("%d %b %Y")
 
         cursor.execute(
-            "SELECT id, predicted_class, label, confidence, description, created_at FROM predictions WHERE user_id = %s ORDER BY created_at DESC",
+            """SELECT id, predicted_class, label, confidence, description, created_at,
+                      visit_confirmed, visit_confirmed_at
+               FROM predictions WHERE user_id = %s ORDER BY created_at DESC""",
             (patient_id,)
         )
         records = cursor.fetchall()
@@ -161,6 +164,9 @@ async def dokter_patient_detail(request: Request, patient_id: int):
             r["emoji"] = info.get("emoji", "❓")
             r["color"] = info.get("color", "#888")
             r["advice"] = info.get("advice", [])
+            r["visit_confirmed"] = bool(r.get("visit_confirmed"))
+            if r.get("visit_confirmed_at"):
+                r["visit_confirmed_at"] = r["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
             if r.get("created_at"):
                 r["created_at"] = r["created_at"].strftime("%Y-%m-%d %H:%M")
     finally:
@@ -219,6 +225,44 @@ async def dokter_add_note(
     add_doctor_note(prediction_id, user["id"], note, need_visit_flag)
     log_activity(user["id"], "doctor_note", f"Menambahkan catatan pada prediksi #{prediction_id}")
 
+    return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)
+
+
+@router.post("/dokter/patients/{patient_id}/confirm-visit/{prediction_id}")
+async def dokter_confirm_visit(
+    request: Request,
+    patient_id: int,
+    prediction_id: int,
+    catatan: str = Form(""),
+):
+    """
+    Dokter merekomendasikan kunjungan / mengonfirmasi ke sistem.
+    Ini membuat baris baru di laporan_kunjungan yang nantinya dikelola
+    oleh owner. Dokter akan dikembalikan ke halaman detail pasien.
+    """
+    user = require_role(request, ["dokter"])
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id FROM predictions WHERE id = %s AND user_id = %s",
+            (prediction_id, patient_id)
+        )
+        valid = cursor.fetchone()
+    finally:
+        cursor.close()
+        db.close()
+
+    if not valid:
+        raise HTTPException(status_code=404, detail="Riwayat prediksi tidak ditemukan.")
+
+    laporan_id = confirm_visit(prediction_id, patient_id, user["id"], catatan.strip() or None)
+    log_activity(user["id"], "confirm_visit", f"Meneruskan prediksi #{prediction_id} ke Laporan Kunjungan Owner")
+
+    # Redirect kembali ke halaman pasien (bukan ke halaman laporan owner)
     return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)
 
 

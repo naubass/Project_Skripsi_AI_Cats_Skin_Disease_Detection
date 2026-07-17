@@ -137,6 +137,11 @@
                 </div>
               </div>
               <span class="badge-conf mt-1 inline-block" style="background:{{ r.color }}18;color:{{ r.color }}">{{ r.confidence }}% yakin</span>
+              {% if r.visit_confirmed %}
+              <span class="badge-conf mt-1 inline-block" style="background:#e6f7ec;color:#1f9254">✅ Sudah kunjungan</span>
+              {% elif r.doctor_notes and r.doctor_notes|selectattr("need_visit")|list|length > 0 %}
+              <span class="badge-conf mt-1 inline-block" style="background:#fde8e8;color:#c0392b">🏥 Perlu kunjungan</span>
+              {% endif %}
               <p class="text-xs leading-relaxed mt-1.5" style="color:var(--text-soft)">{{ r.description }}</p>
               {% if r.advice %}
               <details class="mt-2">
@@ -200,6 +205,28 @@
                           style="background:var(--purple-mid);color:#fff">Simpan</button>
                 </div>
               </form>
+
+              <!-- Konfirmasi Kunjungan -->
+              {% if r.visit_confirmed %}
+              <p class="mt-3 text-xs font-semibold" style="color:#1f9254">
+                ✅ Kunjungan dikonfirmasi{% if r.visit_confirmed_at %} · {{ r.visit_confirmed_at }}{% endif %}
+              </p>
+              {% elif r.doctor_notes and r.doctor_notes|selectattr("need_visit")|list|length > 0 %}
+              <button type="button" onclick="toggleVisitForm({{ r.id }})"
+                      class="mt-3 text-xs font-semibold hover:opacity-70 transition-opacity"
+                      style="color:#c0392b">
+                🏥 Konfirmasi Kunjungan
+              </button>
+              <form id="visit-form-{{ r.id }}" method="post"
+                    action="/dokter/patients/{{ patient.id }}/confirm-visit/{{ r.id }}"
+                    class="hidden mt-2 space-y-2">
+                <textarea name="catatan" rows="2" placeholder="Catatan kunjungan (opsional)..."
+                          class="w-full text-xs rounded-lg p-2 border focus:outline-none"
+                          style="border-color:rgba(192,57,43,0.35);color:var(--text-dark)"></textarea>
+                <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-bold"
+                        style="background:#c0392b;color:#fff">Konfirmasi Kunjungan Sekarang</button>
+              </form>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -271,6 +298,16 @@
   // ── Toggle form tambah catatan dokter ───────────────────────────────────
   function toggleNoteForm(recordId) {
     const form = document.getElementById('note-form-' + recordId);
+    if (!form) return;
+    form.classList.toggle('hidden');
+    if (!form.classList.contains('hidden')) {
+      form.querySelector('textarea').focus();
+    }
+  }
+
+  // ── Toggle form konfirmasi kunjungan ────────────────────────────────────
+  function toggleVisitForm(recordId) {
+    const form = document.getElementById('visit-form-' + recordId);
     if (!form) return;
     form.classList.toggle('hidden');
     if (!form.classList.contains('hidden')) {

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Laporan Kunjungan Klinik — Panel Owner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+  </style>
+</head>
+<body>
+
+<div class="flex flex-col md:flex-row min-h-screen">
+  <!-- Pastikan kamu punya sidebar khusus owner, atau sesuaikan path-nya -->
+  {% include "owner/_sidebar.html" %}
+
+  <main class="flex-1 p-5 md:p-8 min-w-0 overflow-y-auto">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div>
+        <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Laporan Kunjungan</h1>
+        <p class="text-sm mt-1" style="color:var(--text-soft)">Daftar pasien yang disarankan datang ke klinik oleh dokter.</p>
+      </div>
+    </div>
+
+    <!-- Ringkasan Statistik -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div class="stat-card text-center">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Total Laporan</p>
+        <p class="serif text-3xl font-bold" style="color:var(--purple-deep)">{{ stats.total }}</p>
+      </div>
+      <div class="stat-card text-center" style="border-color:#f59e0b40">
+        <p class="text-xs font-bold uppercase mb-1" style="color:#d97706">⏳ Terjadwal</p>
+        <p class="serif text-3xl font-bold" style="color:#d97706">{{ stats.terjadwal }}</p>
+      </div>
+      <div class="stat-card text-center" style="border-color:#22c55e40">
+        <p class="text-xs font-bold uppercase mb-1" style="color:#15803d">✅ Selesai</p>
+        <p class="serif text-3xl font-bold" style="color:#15803d">{{ stats.selesai }}</p>
+      </div>
+      <div class="stat-card text-center" style="border-color:#ef444440">
+        <p class="text-xs font-bold uppercase mb-1" style="color:#b91c1c">❌ Batal/Mangkir</p>
+        <p class="serif text-3xl font-bold" style="color:#b91c1c">{{ stats.batal }}</p>
+      </div>
+    </div>
+
+    <!-- Filter Status -->
+    <div class="mb-6 flex gap-2">
+      <a href="/laporan" class="px-4 py-2 text-xs font-bold rounded-xl transition-all {{ 'bg-purple-600 text-white' if not status_filter else 'bg-white text-gray-500 hover:bg-gray-100' }}">Semua</a>
+      <a href="/laporan?status=terjadwal" class="px-4 py-2 text-xs font-bold rounded-xl transition-all {{ 'bg-yellow-500 text-white' if status_filter == 'terjadwal' else 'bg-white text-gray-500 hover:bg-gray-100' }}">Terjadwal</a>
+      <a href="/laporan?status=selesai" class="px-4 py-2 text-xs font-bold rounded-xl transition-all {{ 'bg-green-500 text-white' if status_filter == 'selesai' else 'bg-white text-gray-500 hover:bg-gray-100' }}">Selesai</a>
+      <a href="/laporan?status=batal" class="px-4 py-2 text-xs font-bold rounded-xl transition-all {{ 'bg-red-500 text-white' if status_filter == 'batal' else 'bg-white text-gray-500 hover:bg-gray-100' }}">Batal</a>
+    </div>
+
+    <!-- Tabel Daftar Laporan -->
+    <div class="stat-card overflow-hidden p-0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr style="background:var(--purple-pale); color:var(--purple-deep)">
+              <th class="p-4 text-xs font-bold uppercase">Tanggal Dibuat</th>
+              <th class="p-4 text-xs font-bold uppercase">Pasien</th>
+              <th class="p-4 text-xs font-bold uppercase">Prediksi & Dokter</th>
+              <th class="p-4 text-xs font-bold uppercase">Status Kunjungan</th>
+              <th class="p-4 text-xs font-bold uppercase text-center">Aksi (Kelola)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" style="border-color:rgba(212,168,67,0.1)">
+            {% for r in laporan_rows %}
+            <tr class="hover:bg-gray-50 transition-colors">
+              <td class="p-4 text-sm" style="color:var(--text-mid)">{{ r.created_at }}</td>
+              <td class="p-4">
+                <p class="font-bold text-sm" style="color:var(--purple-deep)">{{ r.patient_name }}</p>
+                <p class="text-xs" style="color:var(--text-soft)">{{ r.patient_email }}</p>
+              </td>
+              <td class="p-4">
+                <p class="text-sm font-semibold" style="color:var(--text-dark)">{{ r.label }} ({{ r.confidence }}%)</p>
+                <p class="text-xs" style="color:var(--text-soft)">Dirujuk dr. {{ r.confirmed_by_name }}</p>
+              </td>
+              <td class="p-4">
+                {% if r.status == 'terjadwal' %}
+                  <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase rounded bg-yellow-100 text-yellow-700">⏳ Terjadwal</span>
+                {% elif r.status == 'selesai' %}
+                  <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase rounded bg-green-100 text-green-700">✅ Selesai</span><br>
+                  <span class="text-[10px] text-gray-500">{{ r.visit_date }}</span>
+                {% elif r.status == 'batal' %}
+                  <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase rounded bg-red-100 text-red-700">❌ Batal</span>
+                {% endif %}
+              </td>
+              <td class="p-4 text-center space-y-2">
+                <!-- Tombol untuk melihat halaman detail per pasien -->
+                <a href="/laporan/{{ r.id }}" 
+                   class="block w-full px-3 py-1.5 text-[11px] font-bold text-white rounded-lg transition-colors"
+                   style="background: var(--purple-mid); hover:opacity:0.9;">
+                  🔍 Lihat Detail
+                </a>
+                
+                <!-- Form Update Status (Ubah Cepat dari Tabel) -->
+                <form method="post" action="/laporan/{{ r.id }}/status" class="block w-full">
+                  <select name="status" onchange="this.form.submit()" 
+                          class="w-full text-[11px] font-semibold rounded p-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-300 text-center">
+                    <option value="terjadwal" {% if r.status == 'terjadwal' %}selected{% endif %}>Ubah: Terjadwal</option>
+                    <option value="selesai" {% if r.status == 'selesai' %}selected{% endif %}>Ubah: Selesai</option>
+                    <option value="batal" {% if r.status == 'batal' %}selected{% endif %}>Ubah: Batal</option>
+                  </select>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="p-8 text-center text-sm" style="color:var(--text-soft)">Belum ada laporan kunjungan yang sesuai.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

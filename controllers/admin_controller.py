@@ -103,7 +103,8 @@ async def admin_create_user(
     if not admin_user:
         return RedirectResponse("/login", status_code=302)
 
-    if role not in ("user", "admin", "dokter"):
+    # 👇 SUDAH DIPERBAIKI: Menambahkan "owner" ke daftar role yang diizinkan 👇
+    if role not in ("user", "admin", "dokter", "owner"):
         role = "user"
     active_flag = 1 if is_active else 0
 
@@ -143,7 +144,8 @@ async def admin_edit_user(
     if not admin_user:
         return RedirectResponse("/login", status_code=302)
 
-    if role not in ("user", "admin", "dokter"):
+    # 👇 SUDAH DIPERBAIKI: Menambahkan "owner" ke daftar role yang diizinkan 👇
+    if role not in ("user", "admin", "dokter", "owner"):
         role = "user"
     active_flag = 1 if is_active else 0
 

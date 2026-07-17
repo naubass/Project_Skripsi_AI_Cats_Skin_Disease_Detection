@@ -393,7 +393,11 @@
                   🩺 {{ r.doctor_notes|length }} catatan
                 </span>
                 {% endif %}
-                {% if r.need_visit %}
+                {% if r.visit_confirmed %}
+                <span class="badge-conf" style="background:#e6f7ec;color:#1f9254">
+                  ✅ Sudah kunjungan
+                </span>
+                {% elif r.need_visit %}
                 <span class="badge-conf" style="background:#fde8e8;color:#c0392b">
                   🏥 Perlu kunjungan
                 </span>
@@ -462,6 +466,11 @@
                 <p class="text-[11px]" style="color:var(--text-mid)"><span class="font-semibold">{{ h.days }}:</span> {{ h.time }}</p>
                 {% endfor %}
               </div>
+            </div>
+
+            <!-- Info kunjungan sudah dikonfirmasi -->
+            <div id="modal-visit-done" class="hidden rounded-xl p-4" style="background:#e6f7ec;border:1px solid #a7dfba">
+              <p class="text-sm font-bold" style="color:#1f9254">✅ Kunjungan ke klinik sudah dikonfirmasi oleh dokter</p>
             </div>
           </div>
         </div>
@@ -553,6 +562,7 @@ function openDetailModal(id) {
   const modalNotesWrap = document.getElementById('modal-notes-wrap');
   const modalNotes  = document.getElementById('modal-notes');
   const modalAlert  = document.getElementById('modal-visit-alert');
+  const modalVisitDone = document.getElementById('modal-visit-done');
 
   modalImg.src = '/predictions/' + id + '/image';
   modalLabel.textContent = rec.label;
@@ -588,7 +598,8 @@ function openDetailModal(id) {
     modalNotesWrap.classList.add('hidden');
   }
 
-  modalAlert.classList.toggle('hidden', !rec.need_visit);
+  modalAlert.classList.toggle('hidden', !rec.need_visit || rec.visit_confirmed);
+  modalVisitDone.classList.toggle('hidden', !rec.visit_confirmed);
 
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -626,6 +637,7 @@ const RECORD_DETAILS = {
     advice: {{ r.advice|tojson }},
     created_at: {{ (r.created_at.strftime('%d %b %Y, %H:%M') if r.created_at else '-')|tojson }},
     need_visit: {{ 'true' if r.need_visit else 'false' }},
+    visit_confirmed: {{ 'true' if r.visit_confirmed else 'false' }},
     notes: [
       {% for n in r.doctor_notes %}
       {

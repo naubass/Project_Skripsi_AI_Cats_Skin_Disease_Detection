@@ -123,7 +123,7 @@ async def history_page(request: Request):
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT id, predicted_class, label, confidence, description, created_at FROM predictions WHERE user_id = %s ORDER BY created_at DESC LIMIT 50",
+            "SELECT id, predicted_class, label, confidence, description, created_at, visit_confirmed FROM predictions WHERE user_id = %s ORDER BY created_at DESC LIMIT 50",
             (user["id"],)
         )
         records = cursor.fetchall()

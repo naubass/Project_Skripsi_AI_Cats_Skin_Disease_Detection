@@ -44,10 +44,16 @@ async def login_submit(request: Request, email: str = Form(...), password: str =
             "id": user["id"], "name": user["name"], "email": user["email"], "role": user["role"]
         }
         log_activity(user["id"], "login", f"Login sebagai {user['role']}")
+        
+        # 👇 PENGATURAN REDIRECT BERDASARKAN ROLE 👇
         if user["role"] == "admin":
             return RedirectResponse("/admin", status_code=302)
         elif user["role"] == "dokter":
             return RedirectResponse("/dokter", status_code=302)
+        elif user["role"] == "owner":
+            return RedirectResponse("/laporan", status_code=302)
+        
+        # Default untuk 'user' biasa
         return RedirectResponse("/", status_code=302)
     finally:
         cursor.close()

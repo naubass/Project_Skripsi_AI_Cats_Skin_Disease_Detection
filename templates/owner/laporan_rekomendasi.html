@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rekomendasi Kunjungan — Panel Owner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+  </style>
+</head>
+<body>
+
+<div class="flex flex-col md:flex-row min-h-screen">
+  {% include "owner/_sidebar.html" %}
+
+  <main class="flex-1 p-5 md:p-8 min-w-0 overflow-y-auto">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div>
+        <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Rekomendasi Kunjungan Klinik</h1>
+        <p class="text-sm mt-1" style="color:var(--text-soft)">Daftar pasien yang disarankan dokter untuk datang, namun belum dikonfirmasi.</p>
+      </div>
+    </div>
+
+    <!-- Tabel Daftar Rekomendasi -->
+    <div class="stat-card overflow-hidden p-0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr style="background:var(--purple-pale); color:var(--purple-deep)">
+              <th class="p-4 text-xs font-bold uppercase">Tanggal Saran</th>
+              <th class="p-4 text-xs font-bold uppercase">Data Pasien</th>
+              <th class="p-4 text-xs font-bold uppercase">Prediksi & Dokter</th>
+              <th class="p-4 text-xs font-bold uppercase">Catatan Rujukan</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" style="border-color:rgba(212,168,67,0.1)">
+            {% for r in rekomendasi_rows %}
+            <tr class="hover:bg-gray-50 transition-colors">
+              <td class="p-4 text-sm font-semibold" style="color:var(--text-mid)">{{ r.note_date }}</td>
+              <td class="p-4">
+                <p class="font-bold text-sm" style="color:var(--purple-deep)">{{ r.patient_name }}</p>
+                <p class="text-xs" style="color:var(--text-soft)">{{ r.patient_email }}</p>
+              </td>
+              <td class="p-4">
+                <p class="text-sm font-semibold" style="color:var(--text-dark)">{{ r.label }} ({{ r.confidence }}%)</p>
+                <p class="text-xs" style="color:var(--text-soft)">Oleh dr. {{ r.doctor_name }}</p>
+              </td>
+              <td class="p-4">
+                <p class="text-xs italic bg-gray-50 p-2 rounded border" style="color:var(--text-mid)">
+                  "{{ r.note }}"
+                </p>
+                <span class="inline-block mt-2 px-2 py-1 text-[10px] font-bold uppercase rounded bg-red-100 text-red-700">
+                  Belum Kunjungan
+                </span>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="p-8 text-center text-sm" style="color:var(--text-soft)">Saat ini tidak ada pasien yang masuk daftar tunggu rekomendasi kunjungan.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
