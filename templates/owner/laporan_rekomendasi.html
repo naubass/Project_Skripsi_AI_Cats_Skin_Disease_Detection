@@ -33,6 +33,28 @@
       </div>
     </div>
 
+    <!-- Filter & Search -->
+    <form method="get" action="/laporan-rekomendasi" class="mb-6 flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border" style="border-color:rgba(212,168,67,0.15)">
+      
+      <!-- Search Input -->
+      <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Cari nama pasien..." 
+            class="text-sm font-semibold bg-gray-50 border rounded-xl px-3 py-2 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-purple-300">
+
+      <!-- Filter Tanggal (Kalender) -->
+      <input type="date" name="date" value="{{ date_filter or '' }}" onchange="this.form.submit()"
+            class="text-sm font-semibold bg-gray-50 border rounded-xl px-3 py-2 w-full sm:w-auto focus:outline-none focus:ring-2 focus:ring-purple-300" style="color:var(--purple-deep)">
+
+      <!-- Filter Waktu -->
+      <select name="time" onchange="this.form.submit()" class="text-sm font-semibold bg-gray-50 border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-300" style="color:var(--purple-deep)">
+        <option value="all" {% if time_filter == 'all' or not time_filter %}selected{% endif %}>Semua Waktu</option>
+        <option value="mingguan" {% if time_filter == 'mingguan' %}selected{% endif %}>7 Hari Terakhir</option>
+        <option value="bulanan" {% if time_filter == 'bulanan' %}selected{% endif %}>30 Hari Terakhir</option>
+        <option value="tahunan" {% if time_filter == 'tahunan' %}selected{% endif %}>1 Tahun Terakhir</option>
+      </select>
+
+      <button type="submit" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700">Cari</button>
+    </form>
+
     <!-- Tabel Daftar Rekomendasi -->
     <div class="stat-card overflow-hidden p-0">
       <div class="overflow-x-auto">
@@ -68,7 +90,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="4" class="p-8 text-center text-sm" style="color:var(--text-soft)">Saat ini tidak ada pasien yang masuk daftar tunggu rekomendasi kunjungan.</td>
+              <td colspan="4" class="p-8 text-center text-sm" style="color:var(--text-soft)">Saat ini tidak ada data pasien yang masuk daftar tunggu rekomendasi dalam rentang waktu terpilih.</td>
             </tr>
             {% endfor %}
           </tbody>

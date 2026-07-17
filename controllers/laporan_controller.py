@@ -5,7 +5,7 @@ Laporan kunjungan dibuat otomatis ketika dokter menekan tombol "Konfirmasi
 Kunjungan" di halaman detail pasien. Halaman ini dikelola penuh oleh 'owner'.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -29,13 +29,38 @@ async def laporan_list(request: Request):
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    status_filter = request.query_params.get("status", "").strip() or None
-    laporan_rows = get_all_laporan_kunjungan(status_filter)
+    search_query = request.query_params.get("q", "").strip()
+    date_filter = request.query_params.get("date", "").strip() # Format YYYY-MM-DD
+    time_filter = request.query_params.get("time", "all").strip()
+
+    raw_rows = get_all_laporan_kunjungan(search=search_query)
+
+    # Filter Waktu
+    laporan_rows = []
+    now = datetime.now()
+    
+    for row in raw_rows:
+        row_date = row.get("created_at")
+        # Filter Tanggal (Kalender)
+        if date_filter and isinstance(row_date, datetime):
+            if row_date.strftime("%Y-%m-%d") != date_filter:
+                continue
+
+        # Filter Waktu
+        if row_date and isinstance(row_date, datetime):
+            if time_filter == "mingguan" and (now - row_date) > timedelta(days=7):
+                continue
+            elif time_filter == "bulanan" and (now - row_date) > timedelta(days=30):
+                continue
+            elif time_filter == "tahunan" and (now - row_date) > timedelta(days=365):
+                continue
+        
+        laporan_rows.append(row)
 
     for row in laporan_rows:
-        if row.get("created_at"):
+        if row.get("created_at") and isinstance(row["created_at"], datetime):
             row["created_at"] = row["created_at"].strftime("%d %b %Y, %H:%M")
-        if row.get("visit_date"):
+        if row.get("visit_date") and isinstance(row["visit_date"], datetime):
             row["visit_date"] = row["visit_date"].strftime("%d %b %Y, %H:%M")
 
     stats = {
@@ -48,7 +73,8 @@ async def laporan_list(request: Request):
     # Mengarah ke folder owner
     return templates.TemplateResponse("owner/laporan.html", {
         "request": request, "user": user, "laporan_rows": laporan_rows,
-        "stats": stats, "status_filter": status_filter, "active_page": "laporan"
+        "stats": stats, "date_filter": date_filter, "time_filter": time_filter, 
+        "search_query": search_query, "active_page": "laporan"
     })
 
 
@@ -103,23 +129,52 @@ async def laporan_update_status(
 
     return RedirectResponse(f"/laporan/{laporan_id}", status_code=302)
 
+
 @router.get("/laporan-rekomendasi", response_class=HTMLResponse)
 async def laporan_rekomendasi_list(request: Request):
-    """
-    Halaman khusus untuk melihat pasien yang disarankan datang (need_visit = True)
-    tetapi belum dikonfirmasi ke tabel laporan_kunjungan.
-    """
     user = require_role(request, LAPORAN_ROLES)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    rekomendasi_rows = get_pending_recommendations()
+    # Ambil parameter dari URL
+    time_filter = request.query_params.get("time", "all").strip()
+    search_query = request.query_params.get("q", "").strip()
+    date_filter = request.query_params.get("date", "").strip() # Ambil tanggal
+
+    raw_recommendations = get_pending_recommendations(search=search_query)
+
+    rekomendasi_rows = []
+    now = datetime.now()
+
+    for row in raw_recommendations:
+        note_date = row.get("note_date")
+        
+        # Filter Tanggal (Kalender)
+        if date_filter and isinstance(note_date, datetime):
+            if note_date.strftime("%Y-%m-%d") != date_filter:
+                continue
+        
+        # Filter Waktu (Dropdown)
+        if note_date and isinstance(note_date, datetime):
+            if time_filter == "mingguan" and (now - note_date) > timedelta(days=7):
+                continue
+            elif time_filter == "bulanan" and (now - note_date) > timedelta(days=30):
+                continue
+            elif time_filter == "tahunan" and (now - note_date) > timedelta(days=365):
+                continue
+
+        rekomendasi_rows.append(row)
 
     for row in rekomendasi_rows:
-        if row.get("note_date"):
+        if row.get("note_date") and isinstance(row["note_date"], datetime):
             row["note_date"] = row["note_date"].strftime("%d %b %Y, %H:%M")
 
     return templates.TemplateResponse("owner/laporan_rekomendasi.html", {
-        "request": request, "user": user, "rekomendasi_rows": rekomendasi_rows,
+        "request": request, 
+        "user": user, 
+        "rekomendasi_rows": rekomendasi_rows,
+        "time_filter": time_filter, 
+        "date_filter": date_filter, # Kirim ke template
+        "search_query": search_query,
         "active_page": "rekomendasi"
     })

@@ -455,23 +455,25 @@ def delete_doctor_note(note_id: int, doctor_id: int) -> bool:
 # ── Helper: laporan kunjungan (konfirmasi kunjungan klinik) ──────────────────
 def confirm_visit(prediction_id: int, patient_id: int, doctor_id: int, catatan: str = None) -> int:
     """
-    Dipanggil saat dokter menekan tombol "Konfirmasi Kunjungan" di halaman
-    detail pasien. Menandai predictions.visit_confirmed = 1 dan membuat satu
-    baris baru di laporan_kunjungan. Return id laporan yang baru dibuat.
+    Menandai kunjungan sebagai 'selesai' secara otomatis saat dikonfirmasi dokter.
     """
     conn = get_db()
     cursor = conn.cursor()
     try:
         now = __import__("datetime").datetime.now()
+        
+        # 1. Update status prediksi sebagai sudah kunjungan
         cursor.execute(
             "UPDATE predictions SET visit_confirmed = 1, visit_confirmed_at = %s WHERE id = %s",
             (now, prediction_id)
         )
+        
+        # 2. Masukkan ke laporan_kunjungan dengan status 'selesai' dan visit_date = now
         cursor.execute(
             """INSERT INTO laporan_kunjungan
-               (prediction_id, patient_id, confirmed_by, catatan_kunjungan, status, created_at)
-               VALUES (%s, %s, %s, %s, 'terjadwal', %s)""",
-            (prediction_id, patient_id, doctor_id, catatan, now)
+               (prediction_id, patient_id, confirmed_by, catatan_kunjungan, status, visit_date, created_at)
+               VALUES (%s, %s, %s, %s, 'selesai', %s, %s)""",
+            (prediction_id, patient_id, doctor_id, catatan, now, now)
         )
         conn.commit()
         return cursor.lastrowid
@@ -480,11 +482,7 @@ def confirm_visit(prediction_id: int, patient_id: int, doctor_id: int, catatan: 
         conn.close()
 
 
-def get_all_laporan_kunjungan(status: str = None) -> list:
-    """
-    Ambil semua laporan kunjungan (untuk halaman /laporan, diakses dokter &
-    owner), terbaru dulu. Filter opsional berdasarkan status.
-    """
+def get_all_laporan_kunjungan(status: str = None, search: str = None) -> list:
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -497,12 +495,21 @@ def get_all_laporan_kunjungan(status: str = None) -> list:
             JOIN users d ON lk.confirmed_by = d.id
             JOIN predictions p ON lk.prediction_id = p.id
         """
-        params = ()
+        conditions = []
+        params = []
+        
         if status:
-            base += " WHERE lk.status = %s"
-            params = (status,)
+            conditions.append("lk.status = %s")
+            params.append(status)
+        if search:
+            conditions.append("u.name LIKE %s")
+            params.append(f"%{search}%")
+            
+        if conditions:
+            base += " WHERE " + " AND ".join(conditions)
         base += " ORDER BY lk.created_at DESC"
-        cursor.execute(base, params)
+        
+        cursor.execute(base, tuple(params))
         return cursor.fetchall()
     finally:
         cursor.close()
@@ -545,15 +552,11 @@ def update_laporan_kunjungan_status(laporan_id: int, status: str, visit_date=Non
         cursor.close()
         conn.close()
 
-def get_pending_recommendations() -> list:
-    """
-    Ambil semua riwayat di mana dokter menyarankan kunjungan (need_visit = 1)
-    TETAPI belum dikonfirmasi kehadirannya di tabel predictions.
-    """
+def get_pending_recommendations(search: str = None) -> list:
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        sql = """
             SELECT dn.id AS note_id, dn.note, dn.created_at AS note_date,
                    p.id AS prediction_id, p.label, p.confidence,
                    u.id AS patient_id, u.name AS patient_name, u.email AS patient_email,
@@ -563,8 +566,14 @@ def get_pending_recommendations() -> list:
             JOIN users u ON p.user_id = u.id
             JOIN users d ON dn.doctor_id = d.id
             WHERE dn.need_visit = 1 AND p.visit_confirmed = 0
-            ORDER BY dn.created_at DESC
-        """)
+        """
+        params = []
+        if search:
+            sql += " AND u.name LIKE %s"
+            params.append(f"%{search}%")
+        sql += " ORDER BY dn.created_at DESC"
+        
+        cursor.execute(sql, tuple(params))
         return cursor.fetchall()
     finally:
         cursor.close()
