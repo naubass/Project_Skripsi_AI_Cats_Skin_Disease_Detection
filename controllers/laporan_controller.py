@@ -4,7 +4,9 @@ controllers/laporan_controller.py — Route halaman Laporan Kunjungan.
 Laporan kunjungan dibuat otomatis ketika dokter menekan tombol "Konfirmasi
 Kunjungan" di halaman detail pasien. Halaman ini dikelola penuh oleh 'owner'.
 """
-
+import io
+import pandas as pd
+from fastapi.responses import StreamingResponse
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Request, Form, HTTPException
@@ -77,6 +79,77 @@ async def laporan_list(request: Request):
         "search_query": search_query, "active_page": "laporan"
     })
 
+@router.get("/laporan/export")
+async def export_laporan(
+    request: Request,
+    status: str = None,
+    time: str = "all",
+    q: str = "",
+    date: str = "" 
+):
+    user = require_role(request, LAPORAN_ROLES)
+    if not user:
+        raise HTTPException(status_code=403, detail="Tidak diizinkan")
+
+    raw_rows = get_all_laporan_kunjungan(search=q.strip())
+    
+    laporan_rows = []
+    now = datetime.now()
+    
+    for row in raw_rows:
+        row_date = row.get("created_at")
+        if date and isinstance(row_date, datetime):
+            if row_date.strftime("%Y-%m-%d") != date: continue
+        
+        if row_date and isinstance(row_date, datetime):
+            if time == "mingguan" and (now - row_date) > timedelta(days=7): continue
+            elif time == "bulanan" and (now - row_date) > timedelta(days=30): continue
+            elif time == "tahunan" and (now - row_date) > timedelta(days=365): continue
+            
+        laporan_rows.append(row)
+
+    if not laporan_rows:
+        raise HTTPException(status_code=404, detail="Tidak ada data untuk diekspor")
+
+    df = pd.DataFrame(laporan_rows)
+    
+    # Opsional: Ubah nama kolom agar lebih manusiawi
+    mapping = {
+        'created_at': 'Tanggal Dibuat',
+        'patient_name': 'Nama Pasien',
+        'patient_email': 'Email',
+        'label': 'Kondisi',
+        'confidence': 'Confidence (%)',
+        'status': 'Status',
+        'visit_date': 'Tgl Kunjungan'
+    }
+    df = df.rename(columns=mapping)
+    df = df[[c for c in mapping.values() if c in df.columns]]
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Laporan')
+        
+        # --- LOGIKA AUTO-FIT KOLOM ---
+        worksheet = writer.sheets['Laporan']
+        for col in worksheet.columns:
+            max_length = 0
+            column = col[0].column_letter # Mendapatkan huruf kolom (A, B, C...)
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            worksheet.column_dimensions[column].width = max_length + 2 # Tambah sedikit spasi
+            
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=Laporan_Kunjungan_SaktiPetCare.xlsx"}
+    )
 
 @router.get("/laporan/{laporan_id}", response_class=HTMLResponse)
 async def laporan_detail(request: Request, laporan_id: int):
@@ -178,3 +251,74 @@ async def laporan_rekomendasi_list(request: Request):
         "search_query": search_query,
         "active_page": "rekomendasi"
     })
+
+@router.get("/laporan-rekomendasi/export")
+async def export_rekomendasi(
+    request: Request,
+    time: str = "all",
+    q: str = "",
+    date: str = ""
+):
+    user = require_role(request, LAPORAN_ROLES)
+    if not user:
+        raise HTTPException(status_code=403, detail="Tidak diizinkan")
+
+    # Ambil data (sesuai fungsi di laporan_rekomendasi_list)
+    raw_rows = get_pending_recommendations(search=q.strip())
+    
+    rekomendasi_rows = []
+    now = datetime.now()
+    
+    for row in raw_rows:
+        note_date = row.get("note_date")
+        # Filter Tanggal
+        if date and isinstance(note_date, datetime):
+            if note_date.strftime("%Y-%m-%d") != date: continue
+        # Filter Waktu
+        if note_date and isinstance(note_date, datetime):
+            if time == "mingguan" and (now - note_date) > timedelta(days=7): continue
+            elif time == "bulanan" and (now - note_date) > timedelta(days=30): continue
+            elif time == "tahunan" and (now - note_date) > timedelta(days=365): continue
+        rekomendasi_rows.append(row)
+
+    if not rekomendasi_rows:
+        raise HTTPException(status_code=404, detail="Tidak ada data untuk diekspor")
+
+    df = pd.DataFrame(rekomendasi_rows)
+    
+    # Mapping untuk Header Excel
+    mapping = {
+        'note_date': 'Tanggal Saran',
+        'patient_name': 'Nama Pasien',
+        'patient_email': 'Email',
+        'label': 'Prediksi',
+        'confidence': 'Confidence (%)',
+        'doctor_name': 'Dokter',
+        'note': 'Catatan Rujukan'
+    }
+    df = df.rename(columns=mapping)
+    df = df[[c for c in mapping.values() if c in df.columns]]
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Rekomendasi')
+        
+        # Auto-fit kolom
+        worksheet = writer.sheets['Rekomendasi']
+        for col in worksheet.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except: pass
+            worksheet.column_dimensions[column].width = max_length + 2
+            
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=Rekomendasi_Kunjungan_SaktiPetCare.xlsx"}
+    )

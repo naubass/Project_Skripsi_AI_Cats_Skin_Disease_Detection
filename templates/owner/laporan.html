@@ -46,7 +46,7 @@
     </div>
 
     <!-- Filter Multi (Status & Waktu) -->
-    <form method="get" action="/laporan" class="mb-6 flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border" style="border-color:rgba(212,168,67,0.15)">
+    <form method="get" action="/laporan" id="filter-form" class="mb-6 flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border" style="border-color:rgba(212,168,67,0.15)">
       
       <!-- Search Input -->
       <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Cari nama pasien..." 
@@ -65,6 +65,11 @@
       </select>
 
       <button type="submit" class="px-5 py-2 bg-purple-600 text-white text-sm font-bold rounded-xl hover:bg-purple-700">Cari</button>
+
+      <!-- Tombol Download -->
+      <button type="button" onclick="exportExcel()" class="px-4 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700">
+        📥 Export Excel
+      </button>
     </form>
 
     <!-- Tabel Daftar Laporan -->
@@ -73,7 +78,7 @@
         <table class="w-full text-left border-collapse">
           <thead>
             <tr style="background:var(--purple-pale); color:var(--purple-deep)">
-              <th class="p-4 text-xs font-bold uppercase">Tanggal Dibuat</th>
+              <th class="p-4 text-xs font-bold uppercase">Tanggal Kunjungan</th>
               <th class="p-4 text-xs font-bold uppercase">Pasien</th>
               <th class="p-4 text-xs font-bold uppercase">Prediksi & Dokter</th>
               <th class="p-4 text-xs font-bold uppercase">Status Kunjungan</th>
@@ -125,6 +130,15 @@
 
   </main>
 </div>
+
+<script>
+function exportExcel() {
+    const form = document.getElementById('filter-form');
+    // Ambil data form dan ubah jadi query string
+    const params = new URLSearchParams(new FormData(form));
+    window.location.href = '/laporan/export?' + params.toString();
+}
+</script>
 
 </body>
 </html>

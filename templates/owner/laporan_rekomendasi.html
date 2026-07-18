@@ -34,7 +34,7 @@
     </div>
 
     <!-- Filter & Search -->
-    <form method="get" action="/laporan-rekomendasi" class="mb-6 flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border" style="border-color:rgba(212,168,67,0.15)">
+    <form method="get" action="/laporan-rekomendasi" id="filter-form" class="mb-6 flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border" style="border-color:rgba(212,168,67,0.15)">
       
       <!-- Search Input -->
       <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Cari nama pasien..." 
@@ -53,6 +53,9 @@
       </select>
 
       <button type="submit" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700">Cari</button>
+      <button type="button" onclick="exportExcel()" class="px-4 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700">
+        📥 Export Excel
+      </button>
     </form>
 
     <!-- Tabel Daftar Rekomendasi -->
@@ -101,5 +104,13 @@
   </main>
 </div>
 
+<!-- Tambahkan script ini sebelum penutup body -->
+<script>
+function exportExcel() {
+    const form = document.querySelector('form'); // Mengambil form filter yang ada
+    const params = new URLSearchParams(new FormData(form));
+    window.location.href = '/laporan-rekomendasi/export?' + params.toString();
+}
+</script>
 </body>
 </html>
