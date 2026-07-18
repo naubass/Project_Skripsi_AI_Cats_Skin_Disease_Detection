@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Laporan Kunjungan Klinik — Panel Owner</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
       --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
@@ -34,16 +35,47 @@
     </div>
 
     <!-- Ringkasan Statistik -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
       <div class="stat-card text-center">
         <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Total Laporan</p>
         <p class="serif text-3xl font-bold" style="color:var(--purple-deep)">{{ stats.total }}</p>
       </div>
       <div class="stat-card text-center" style="border-color:#22c55e40">
-        <p class="text-xs font-bold uppercase mb-1" style="color:#15803d">Selesai Kunjungan</p>
-        <p class="serif text-3xl font-bold" style="color:#15803d">{{ stats.selesai }}</p>
+        <p class="text-xs font-bold uppercase mb-1" style="color:#15803d">Diagnosis Terbanyak</p>
+        <p class="serif text-2xl font-bold" id="stat-diagnosis-selesai" style="color:#15803d">—</p>
+      </div>
+      <div class="stat-card text-center" style="border-color:#eab30840">
+        <p class="text-xs font-bold uppercase mb-1" style="color:#a16207">Dokter Rujukan Terbanyak</p>
+        <p class="serif text-2xl font-bold" id="stat-dokter-terbanyak" style="color:#a16207">—</p>
       </div>
     </div>
+
+    <!-- Visualisasi Data -->
+    {% if laporan_rows %}
+    <div class="grid md:grid-cols-3 gap-5 mb-6">
+      <div class="stat-card md:col-span-3 flex flex-col">
+        <p class="text-xs font-bold uppercase mb-3" style="color:var(--text-soft)">📈 Tren Jumlah Laporan</p>
+        <div style="position:relative;height:220px">
+          <canvas id="chartTrendLine"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-5 mb-8">
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase mb-3" style="color:var(--text-soft)">🏆 Kondisi Paling Sering Dirujuk</p>
+        <div style="position:relative;height:230px">
+          <canvas id="chartKondisiBar"></canvas>
+        </div>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs font-bold uppercase mb-3" style="color:var(--text-soft)">👩‍⚕️ Dokter dengan Rujukan Terbanyak</p>
+        <div style="position:relative;height:230px">
+          <canvas id="chartDokterBar"></canvas>
+        </div>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Filter Multi (Status & Waktu) -->
     <form method="get" action="/laporan" id="filter-form" class="mb-6 flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border" style="border-color:rgba(212,168,67,0.15)">
@@ -98,15 +130,13 @@
                 <p class="text-xs" style="color:var(--text-soft)">Dirujuk dr. {{ r.confirmed_by_name }}</p>
               </td>
               <td class="p-4">
-                {% if r.status == 'terjadwal' %}
-                  <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase rounded bg-yellow-100 text-yellow-700">⏳ Terjadwal</span>
-                {% elif r.status == 'selesai' %}
+                {% if r.status == 'selesai' %}
                   <div class="flex flex-col gap-1">
                     <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase rounded bg-green-100 text-green-700">✅ Selesai</span>
                     <span class="text-[10px] font-bold" style="color:var(--purple-mid)">📅 {{ r.visit_date }}</span>
                   </div>
-                {% elif r.status == 'batal' %}
-                  <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase rounded bg-red-100 text-red-700">❌ Batal</span>
+                {% else %}
+                  <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase rounded bg-yellow-100 text-yellow-700">⏳ Menunggu Konfirmasi</span>
                 {% endif %}
               </td>
               <td class="p-4 text-center space-y-2">
@@ -139,6 +169,190 @@ function exportExcel() {
     window.location.href = '/laporan/export?' + params.toString();
 }
 </script>
+
+{% if laporan_rows %}
+<script>
+/* ══════════════════════════════════════════════
+   DATA LAPORAN (dari Jinja2) — dipakai semua chart
+══════════════════════════════════════════════ */
+const LAPORAN = [
+  {% for r in laporan_rows %}
+  {
+    created_at: {{ r.created_at|tojson }},
+    patient_name: {{ r.patient_name|tojson }},
+    label: {{ r.label|tojson }},
+    confidence: {{ r.confidence|tojson }},
+    doctor: {{ r.confirmed_by_name|tojson }},
+    status: {{ r.status|tojson }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.color = '#8b7fb8';
+
+/* Ambil bagian tanggal saja dari string created_at, apa pun formatnya
+   ("2026-07-01 10:00" atau "01 Jul 2026, 10:00"), supaya tren bisa
+   dikelompokkan per hari tanpa perlu tahu format pasti dari backend. */
+function extractDatePart(s) {
+  if (!s) return '-';
+  if (s.includes(',')) return s.split(',')[0].trim();
+  const m = s.match(/^(.*)\s+\d{1,2}:\d{2}$/);
+  if (m) return m[1].trim();
+  return s.trim();
+}
+
+/* ── 1. Line: Tren Jumlah Laporan per Tanggal ─────────────────────────── */
+const trendMap = {};
+[...LAPORAN].reverse().forEach(r => {
+  const d = extractDatePart(r.created_at);
+  trendMap[d] = (trendMap[d] || 0) + 1;
+});
+const trendDates = Object.keys(trendMap);
+
+new Chart(document.getElementById('chartTrendLine'), {
+  type: 'line',
+  data: {
+    labels: trendDates,
+    datasets: [{
+      label: 'Jumlah Laporan',
+      data: trendDates.map(d => trendMap[d]),
+      borderColor: '#4c2fa0',
+      backgroundColor: ctx => {
+        const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
+        g.addColorStop(0, 'rgba(76,47,160,0.18)');
+        g.addColorStop(1, 'rgba(76,47,160,0.00)');
+        return g;
+      },
+      fill: true,
+      tension: 0.35,
+      borderWidth: 2.5,
+      pointBackgroundColor: '#4c2fa0',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, font: { size: 11 } },
+        grid: { color: 'rgba(237,232,248,0.6)' }
+      },
+      x: {
+        ticks: { font: { size: 10 }, maxTicksLimit: 8 },
+        grid: { display: false }
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `  ${ctx.raw} laporan` } }
+    },
+    animation: { duration: 900 }
+  }
+});
+
+/* ── 2. Bar: Kondisi Paling Sering Dirujuk ────────────────────────────── */
+const kondisiCount = {};
+LAPORAN.forEach(r => { kondisiCount[r.label] = (kondisiCount[r.label] || 0) + 1; });
+const kondisiEntries = Object.entries(kondisiCount).sort((a, b) => b[1] - a[1]);
+
+new Chart(document.getElementById('chartKondisiBar'), {
+  type: 'bar',
+  data: {
+    labels: kondisiEntries.map(e => e[0]),
+    datasets: [{
+      data: kondisiEntries.map(e => e[1]),
+      backgroundColor: 'rgba(76,47,160,0.65)',
+      borderColor: '#4c2fa0',
+      borderWidth: 2,
+      borderRadius: 8,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, font: { size: 11 } },
+        grid: { color: 'rgba(237,232,248,0.6)' }
+      },
+      y: { grid: { display: false }, ticks: { font: { size: 12 } } }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `  ${ctx.raw}× dirujuk` } }
+    },
+    animation: { duration: 900 }
+  }
+});
+
+/* ── 3. Bar: Dokter dengan Rujukan Terbanyak ──────────────────────────── */
+const dokterCount = {};
+LAPORAN.forEach(r => {
+  const name = r.doctor || 'Tidak diketahui';
+  dokterCount[name] = (dokterCount[name] || 0) + 1;
+});
+const dokterEntries = Object.entries(dokterCount).sort((a, b) => b[1] - a[1]);
+
+new Chart(document.getElementById('chartDokterBar'), {
+  type: 'bar',
+  data: {
+    labels: dokterEntries.map(e => 'dr. ' + e[0]),
+    datasets: [{
+      data: dokterEntries.map(e => e[1]),
+      backgroundColor: 'rgba(212,168,67,0.65)',
+      borderColor: '#c8962e',
+      borderWidth: 2,
+      borderRadius: 8,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, font: { size: 11 } },
+        grid: { color: 'rgba(237,232,248,0.6)' }
+      },
+      x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `  ${ctx.raw}× merujuk` } }
+    },
+    animation: { duration: 900, delay: ctx => ctx.dataIndex * 80 }
+  }
+});
+
+/* ── 4. Isi 2 stat card di atas berdasarkan LAPORAN ───────────────────── */
+// Kartu "Diagnosis Terbanyak (Selesai)": hitung label prediksi paling
+// sering muncul HANYA di antara laporan berstatus 'selesai'.
+const selesaiCount = {};
+LAPORAN.filter(r => r.status === 'selesai').forEach(r => {
+  selesaiCount[r.label] = (selesaiCount[r.label] || 0) + 1;
+});
+const selesaiEntries = Object.entries(selesaiCount).sort((a, b) => b[1] - a[1]);
+document.getElementById('stat-diagnosis-selesai').textContent = selesaiEntries.length
+  ? `${selesaiEntries[0][0]} (${selesaiEntries[0][1]}×)`
+  : 'Belum ada';
+
+// Kartu "Dokter Rujukan Terbanyak": pakai dokterEntries yang sudah
+// dihitung di atas untuk chart #3, ambil urutan teratas saja.
+document.getElementById('stat-dokter-terbanyak').textContent = dokterEntries.length
+  ? `dr. ${dokterEntries[0][0]} (${dokterEntries[0][1]}×)`
+  : 'Belum ada';
+</script>
+{% endif %}
 
 </body>
 </html>

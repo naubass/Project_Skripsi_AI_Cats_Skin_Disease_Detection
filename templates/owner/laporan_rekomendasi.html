@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rekomendasi Kunjungan — Panel Owner</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
       --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
@@ -32,6 +33,48 @@
         <p class="text-sm mt-1" style="color:var(--text-soft)">Daftar pasien yang disarankan dokter untuk datang, namun belum dikonfirmasi.</p>
       </div>
     </div>
+
+    <!-- Ringkasan Statistik -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div class="stat-card text-center" style="border-color:#ef444440">
+        <p class="text-xs font-bold uppercase mb-1" style="color:#b91c1c">Total Rekomendasi Belum Kunjungan</p>
+        <p class="serif text-3xl font-bold" style="color:#b91c1c">{{ rekomendasi_rows|length }}</p>
+      </div>
+      <div class="stat-card text-center">
+        <p class="text-xs font-bold uppercase mb-1" style="color:var(--text-soft)">Pasien Unik Menunggu</p>
+        <p class="serif text-3xl font-bold" style="color:var(--purple-deep)">{{ rekomendasi_rows | map(attribute='patient_email') | unique | list | length }}</p>
+      </div>
+      <div class="stat-card text-center" style="border-color:#22c55e40">
+        <p class="text-xs font-bold uppercase mb-1" style="color:#15803d">Kondisi Terbanyak</p>
+        <p class="serif text-2xl font-bold leading-tight" style="color:#15803d" id="stat-top-kondisi">—</p>
+      </div>
+    </div>
+
+    <!-- Visualisasi Data -->
+    {% if rekomendasi_rows %}
+    <div class="grid md:grid-cols-3 gap-5 mb-6">
+      <div class="stat-card flex flex-col">
+        <p class="text-xs font-bold uppercase mb-3" style="color:var(--text-soft)">🩺 Distribusi Hasil Prediksi</p>
+        <div style="position:relative;height:200px">
+          <canvas id="chartPrediksiDonut"></canvas>
+        </div>
+        <div id="prediksiLegend" class="flex flex-wrap justify-center gap-3 mt-3"></div>
+      </div>
+      <div class="stat-card md:col-span-2 flex flex-col">
+        <p class="text-xs font-bold uppercase mb-3" style="color:var(--text-soft)">📈 Tren Rekomendasi per Tanggal</p>
+        <div style="position:relative;height:220px">
+          <canvas id="chartTrendLine"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card mb-8">
+      <p class="text-xs font-bold uppercase mb-3" style="color:var(--text-soft)">👩‍⚕️ Dokter dengan Rekomendasi Terbanyak</p>
+      <div style="position:relative;height:230px">
+        <canvas id="chartDokterBar"></canvas>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Filter & Search -->
     <form method="get" action="/laporan-rekomendasi" id="filter-form" class="mb-6 flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border" style="border-color:rgba(212,168,67,0.15)">
@@ -112,5 +155,178 @@ function exportExcel() {
     window.location.href = '/laporan-rekomendasi/export?' + params.toString();
 }
 </script>
+
+{% if rekomendasi_rows %}
+<script>
+/* ══════════════════════════════════════════════
+   DATA REKOMENDASI (dari Jinja2) — dipakai semua chart
+══════════════════════════════════════════════ */
+const REKOMENDASI = [
+  {% for r in rekomendasi_rows %}
+  {
+    note_date: {{ r.note_date|tojson }},
+    label: {{ r.label|tojson }},
+    doctor_name: {{ r.doctor_name|tojson }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.color = '#8b7fb8';
+
+/* Ambil bagian tanggal saja dari string note_date, apa pun formatnya
+   ("2026-07-01 10:00" atau "01 Jul 2026, 10:00"), supaya tren bisa
+   dikelompokkan per hari tanpa perlu tahu format pasti dari backend. */
+function extractDatePart(s) {
+  if (!s) return '-';
+  if (s.includes(',')) return s.split(',')[0].trim();
+  const m = s.match(/^(.*)\s+\d{1,2}:\d{2}$/);
+  if (m) return m[1].trim();
+  return s.trim();
+}
+
+/* ── 1. Donut: Distribusi Hasil Prediksi ──────────────────────────────── */
+const palette = ['#4c2fa0', '#d4a843', '#22c55e', '#3b82f6', '#a855f7', '#f59e0b', '#ef4444'];
+const kondisiCount = {};
+REKOMENDASI.forEach(r => { kondisiCount[r.label] = (kondisiCount[r.label] || 0) + 1; });
+const kEntries = Object.entries(kondisiCount).sort((a, b) => b[1] - a[1]);
+const kLabels = kEntries.map(e => e[0]);
+const kCounts = kEntries.map(e => e[1]);
+const kColors = kLabels.map((_, i) => palette[i % palette.length]);
+
+new Chart(document.getElementById('chartPrediksiDonut'), {
+  type: 'doughnut',
+  data: {
+    labels: kLabels,
+    datasets: [{
+      data: kCounts,
+      backgroundColor: kColors.map(c => c + 'cc'),
+      borderColor: '#fff',
+      borderWidth: 3,
+      hoverOffset: 8,
+    }]
+  },
+  options: {
+    cutout: '66%',
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `  ${ctx.label}: ${ctx.raw}×` } }
+    },
+    animation: { animateRotate: true, duration: 900 }
+  }
+});
+
+const legendEl = document.getElementById('prediksiLegend');
+kLabels.forEach((label, i) => {
+  const pct = ((kCounts[i] / REKOMENDASI.length) * 100).toFixed(0);
+  legendEl.innerHTML += `
+    <div class="flex items-center gap-1.5">
+      <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${kColors[i]}"></span>
+      <span class="text-xs" style="color:var(--text-mid)">${label} (${pct}%)</span>
+    </div>`;
+});
+
+/* Isi kartu "Kondisi Terbanyak" di ringkasan statistik atas */
+if (kLabels.length > 0) {
+  document.getElementById('stat-top-kondisi').textContent = kLabels[0] + ' (' + kCounts[0] + '×)';
+}
+
+/* ── 2. Line: Tren Rekomendasi per Tanggal ────────────────────────────── */
+const trendMap = {};
+[...REKOMENDASI].reverse().forEach(r => {
+  const d = extractDatePart(r.note_date);
+  trendMap[d] = (trendMap[d] || 0) + 1;
+});
+const trendDates = Object.keys(trendMap);
+
+new Chart(document.getElementById('chartTrendLine'), {
+  type: 'line',
+  data: {
+    labels: trendDates,
+    datasets: [{
+      label: 'Jumlah Rekomendasi',
+      data: trendDates.map(d => trendMap[d]),
+      borderColor: '#4c2fa0',
+      backgroundColor: ctx => {
+        const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
+        g.addColorStop(0, 'rgba(76,47,160,0.18)');
+        g.addColorStop(1, 'rgba(76,47,160,0.00)');
+        return g;
+      },
+      fill: true,
+      tension: 0.35,
+      borderWidth: 2.5,
+      pointBackgroundColor: '#4c2fa0',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, font: { size: 11 } },
+        grid: { color: 'rgba(237,232,248,0.6)' }
+      },
+      x: {
+        ticks: { font: { size: 10 }, maxTicksLimit: 8 },
+        grid: { display: false }
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `  ${ctx.raw} rekomendasi` } }
+    },
+    animation: { duration: 900 }
+  }
+});
+
+/* ── 3. Bar: Dokter dengan Rekomendasi Terbanyak ──────────────────────── */
+const dokterCount = {};
+REKOMENDASI.forEach(r => {
+  const name = r.doctor_name || 'Tidak diketahui';
+  dokterCount[name] = (dokterCount[name] || 0) + 1;
+});
+const dokterEntries = Object.entries(dokterCount).sort((a, b) => b[1] - a[1]);
+
+new Chart(document.getElementById('chartDokterBar'), {
+  type: 'bar',
+  data: {
+    labels: dokterEntries.map(e => 'dr. ' + e[0]),
+    datasets: [{
+      data: dokterEntries.map(e => e[1]),
+      backgroundColor: 'rgba(212,168,67,0.65)',
+      borderColor: '#c8962e',
+      borderWidth: 2,
+      borderRadius: 8,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1, font: { size: 11 } },
+        grid: { color: 'rgba(237,232,248,0.6)' }
+      },
+      x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `  ${ctx.raw}× merujuk` } }
+    },
+    animation: { duration: 900, delay: ctx => ctx.dataIndex * 80 }
+  }
+});
+</script>
+{% endif %}
+
 </body>
 </html>
