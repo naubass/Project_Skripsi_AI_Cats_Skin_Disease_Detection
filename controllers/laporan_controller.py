@@ -38,22 +38,28 @@ async def laporan_list(request: Request, page: int = 1, per_page: int = 10):
     search_query = request.query_params.get("q", "").strip()
     date_filter = request.query_params.get("date", "").strip()
     time_filter = request.query_params.get("time", "all").strip()
+    status_filter = request.query_params.get("status", "all").strip() # <-- Parameter Status Baru
 
     raw_rows = get_all_laporan_kunjungan(search=search_query)
 
-    # Filter Waktu & Tanggal (Full Data)
+    # Filter Waktu, Tanggal, & Status (Full Data)
     all_filtered_rows = []
     now = datetime.now()
     
     for row in raw_rows:
         row_date = row.get("created_at")
+        row_status = row.get("status")
         
-        # 1. Filter Tanggal (Kalender)
+        # 1. Filter Status
+        if status_filter != "all" and row_status != status_filter:
+            continue
+
+        # 2. Filter Tanggal (Kalender)
         if date_filter and isinstance(row_date, datetime):
             if row_date.strftime("%Y-%m-%d") != date_filter:
                 continue
         
-        # 2. Filter Waktu (Mingguan/Bulanan)
+        # 3. Filter Waktu (Mingguan/Bulanan/Tahunan)
         if row_date and isinstance(row_date, datetime):
             if time_filter == "mingguan" and (now - row_date) > timedelta(days=7): continue
             elif time_filter == "bulanan" and (now - row_date) > timedelta(days=30): continue
@@ -73,7 +79,7 @@ async def laporan_list(request: Request, page: int = 1, per_page: int = 10):
     # Format data untuk JS Chart (Full History)
     all_laporan_rows = []
     for row in all_filtered_rows:
-        r = dict(row) # Copy agar tidak merusak data asli
+        r = dict(row)
         if r.get("created_at") and isinstance(r["created_at"], datetime):
             r["created_at"] = r["created_at"].strftime("%d %b %Y, %H:%M")
         all_laporan_rows.append(r)
@@ -98,9 +104,12 @@ async def laporan_list(request: Request, page: int = 1, per_page: int = 10):
     return templates.TemplateResponse("owner/laporan.html", {
         "request": request, "user": user, 
         "laporan_rows": laporan_rows, 
-        "all_laporan_rows": all_laporan_rows, # Data full untuk grafik
+        "all_laporan_rows": all_laporan_rows,
         "stats": stats, 
-        "date_filter": date_filter, "time_filter": time_filter, "search_query": search_query, 
+        "date_filter": date_filter, 
+        "time_filter": time_filter, 
+        "status_filter": status_filter, # <-- Kirim ke template
+        "search_query": search_query, 
         "active_page": "laporan",
         "page": page, "total_pages": total_pages, "total_data": total_data
     })
@@ -108,7 +117,7 @@ async def laporan_list(request: Request, page: int = 1, per_page: int = 10):
 @router.get("/laporan/export")
 async def export_laporan(
     request: Request,
-    status: str = None,
+    status: str = "all",
     time: str = "all",
     q: str = "",
     date: str = "" 
@@ -124,6 +133,9 @@ async def export_laporan(
     
     for row in raw_rows:
         row_date = row.get("created_at")
+        row_status = row.get("status")
+        
+        if status != "all" and row_status != status: continue
         if date and isinstance(row_date, datetime):
             if row_date.strftime("%Y-%m-%d") != date: continue
         
@@ -139,7 +151,6 @@ async def export_laporan(
 
     df = pd.DataFrame(laporan_rows)
     
-    # Opsional: Ubah nama kolom agar lebih manusiawi
     mapping = {
         'created_at': 'Tanggal Dibuat',
         'patient_name': 'Nama Pasien',
@@ -156,18 +167,17 @@ async def export_laporan(
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Laporan')
         
-        # --- LOGIKA AUTO-FIT KOLOM ---
         worksheet = writer.sheets['Laporan']
         for col in worksheet.columns:
             max_length = 0
-            column = col[0].column_letter # Mendapatkan huruf kolom (A, B, C...)
+            column = col[0].column_letter
             for cell in col:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
                 except:
                     pass
-            worksheet.column_dimensions[column].width = max_length + 2 # Tambah sedikit spasi
+            worksheet.column_dimensions[column].width = max_length + 2
             
     output.seek(0)
 

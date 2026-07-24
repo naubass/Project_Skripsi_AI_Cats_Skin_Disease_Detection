@@ -326,7 +326,7 @@ async def dokter_reschedule_visit(
     prediction_id: int,
     catatan: str = Form(""),
 ):
-    """Dokter meminta reschedule. Status di-set 'batal' dengan penanda khusus."""
+    """Dokter meminta reschedule. Status laporan di-set 'batal' dan tanda konfirmasi di prediksi di-reset ke 0."""
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -334,9 +334,9 @@ async def dokter_reschedule_visit(
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # Gunakan penanda [RESCHEDULE_DOKTER] agar frontend bisa membedakannya dengan mutlak
         pesan_reschedule = f"[RESCHEDULE_DOKTER] {catatan.strip()}" if catatan.strip() else "[RESCHEDULE_DOKTER] Dokter meminta Anda untuk memilih jadwal kunjungan ulang."
         
+        # 1. Update laporan kunjungan menjadi batal dan kosongkan rujukan dokter
         cursor.execute("SELECT id FROM laporan_kunjungan WHERE prediction_id = %s", (prediction_id,))
         existing = cursor.fetchone()
         
@@ -353,6 +353,15 @@ async def dokter_reschedule_visit(
                    VALUES (%s, %s, %s, NULL, 'batal', %s, NOW())""",
                 (prediction_id, patient_id, patient_id, pesan_reschedule)
             )
+
+        # 2. PENTING: Reset tanda visit_confirmed pada tabel predictions kembali ke 0
+        cursor.execute(
+            """UPDATE predictions 
+               SET visit_confirmed = 0, visit_confirmed_at = NULL 
+               WHERE id = %s""",
+            (prediction_id,)
+        )
+
         db.commit()
     finally:
         cursor.close()

@@ -77,14 +77,22 @@
     </div>
     {% endif %}
 
-    <!-- Filter Multi (Status & Waktu) -->
+    <!-- Filter Multi (Status, Kalender, Waktu) -->
     <form method="get" action="/laporan" id="filter-form" class="mb-6 flex flex-wrap gap-3 items-center p-4 bg-white rounded-2xl border" style="border-color:rgba(212,168,67,0.15)">
       
       <!-- Search Input -->
       <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Cari nama pasien..." 
-            class="text-sm font-semibold bg-gray-50 border rounded-xl px-3 py-2 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-purple-300">
+            class="text-sm font-semibold bg-gray-50 border rounded-xl px-3 py-2 w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-purple-300">
 
-      <!-- Kalender Filter (Menggantikan Status) -->
+      <!-- FILTER STATUS BARU -->
+      <select name="status" class="text-sm font-semibold bg-gray-50 border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-300" style="color:var(--purple-deep)">
+        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Semua Status</option>
+        <option value="terjadwal" {% if status_filter == 'terjadwal' %}selected{% endif %}>⏳ Terjadwal</option>
+        <option value="selesai" {% if status_filter == 'selesai' %}selected{% endif %}>✅ Selesai</option>
+        <option value="batal" {% if status_filter == 'batal' %}selected{% endif %}>❌ Batal</option>
+      </select>
+
+      <!-- Kalender Filter -->
       <input type="date" name="date" value="{{ date_filter or '' }}" 
             class="text-sm font-semibold bg-gray-50 border rounded-xl px-3 py-2 w-full sm:w-auto focus:outline-none focus:ring-2 focus:ring-purple-300" style="color:var(--purple-deep)">
 
@@ -167,7 +175,7 @@
 
     <!-- ── PAGINATION CONTROLS ── -->
     {% if total_pages > 1 %}
-    {% set query_str = "?q=" ~ (search_query or '') ~ "&date=" ~ (date_filter or '') ~ "&time=" ~ (time_filter or '') %}
+    {% set query_str = "?q=" ~ (search_query or '') ~ "&status=" ~ (status_filter or 'all') ~ "&date=" ~ (date_filter or '') ~ "&time=" ~ (time_filter or '') %}
     <div class="flex flex-wrap items-center justify-center gap-2 mt-8">
       
       <!-- Tombol Awal -->
