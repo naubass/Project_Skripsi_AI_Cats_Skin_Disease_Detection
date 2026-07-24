@@ -15,7 +15,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from database import (
     get_all_laporan_kunjungan, get_laporan_kunjungan_by_id,
-    update_laporan_kunjungan_status, log_activity, get_pending_recommendations
+    update_laporan_kunjungan_status, log_activity, get_pending_recommendations,
+    auto_update_expired_visits
 )
 from core.state import templates
 from core.dependencies import require_role
@@ -31,6 +32,8 @@ async def laporan_list(request: Request, page: int = 1, per_page: int = 10):
     user = require_role(request, LAPORAN_ROLES)
     if not user:
         return RedirectResponse("/login", status_code=302)
+
+    auto_update_expired_visits()
 
     search_query = request.query_params.get("q", "").strip()
     date_filter = request.query_params.get("date", "").strip()

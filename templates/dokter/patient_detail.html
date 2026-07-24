@@ -67,8 +67,6 @@
     <!-- Charts row -->
     {% if total_data > 0 %}
     <div class="grid lg:grid-cols-2 gap-6 mb-6">
-
-      <!-- Donut distribusi pasien ini -->
       <div class="stat-card">
         <div class="section-badge">📊 Distribusi</div>
         <h3 class="font-bold text-base mb-4" style="color:var(--purple-deep)">Kondisi yang Terdeteksi</h3>
@@ -84,7 +82,6 @@
         </div>
       </div>
 
-      <!-- Line: confidence trend pasien ini -->
       <div class="stat-card">
         <div class="section-badge">📉 Tren</div>
         <h3 class="font-bold text-base mb-4" style="color:var(--purple-deep)">Confidence per Sesi</h3>
@@ -92,7 +89,6 @@
       </div>
     </div>
 
-    <!-- Bar: Frekuensi kondisi paling sering terdeteksi (pasien ini) -->
     <div class="stat-card mb-6">
       <div class="section-badge">📈 Frekuensi</div>
       <h3 class="font-bold text-base mb-1" style="color:var(--purple-deep)">Kondisi Paling Sering Terdeteksi</h3>
@@ -136,13 +132,30 @@
                   <p class="text-[10px] whitespace-nowrap" style="color:var(--text-soft)">{{ r.created_at[11:16] if r.created_at else '' }}</p>
                 </div>
               </div>
-              <span class="badge-conf mt-1 inline-block" style="background:{{ r.color }}18;color:{{ r.color }}">{{ r.confidence }}% yakin</span>
-              {% if r.visit_confirmed %}
-              <span class="badge-conf mt-1 inline-block" style="background:#e6f7ec;color:#1f9254">✅ Sudah kunjungan</span>
-              {% elif r.doctor_notes and r.doctor_notes|selectattr("need_visit")|list|length > 0 %}
-              <span class="badge-conf mt-1 inline-block" style="background:#fde8e8;color:#c0392b">🏥 Perlu kunjungan</span>
-              {% endif %}
+              
+              <div class="flex items-center gap-1.5 flex-wrap mt-1">
+                <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">{{ r.confidence }}% yakin</span>
+
+                <!-- BADGE STATUS PRESISI UNTUK DOKTER -->
+                {% if r.visit_status == 'selesai' %}
+                  <span class="badge-conf" style="background:#e6f7ec;color:#1f9254">✅ Kunjungan Selesai</span>
+                {% elif r.visit_confirmed and r.visit_status == 'terjadwal' %}
+                  <span class="badge-conf" style="background:#e6f7ec;color:#1f9254">✅ Dikonfirmasi Dokter ({{ r.booking_full_formatted }})</span>
+                {% elif r.visit_status == 'terjadwal' %}
+                  <span class="badge-conf" style="background:#fef3c7;color:#b45309">⏳ Menunggu Konfirmasi Dokter: {{ r.booking_full_formatted }}</span>
+                {% elif r.visit_status == 'batal' %}
+                  {% if r.catatan_kunjungan and '[RESCHEDULE_DOKTER]' in r.catatan_kunjungan %}
+                    <span class="badge-conf" style="background:#fee2e2;color:#b91c1c">🔄 Meminta Reschedule ke Pasien</span>
+                  {% else %}
+                    <span class="badge-conf" style="background:#fee2e2;color:#b91c1c">❌ Booking Dibatalkan Pasien</span>
+                  {% endif %}
+                {% elif r.doctor_notes and r.doctor_notes|selectattr("need_visit")|list|length > 0 %}
+                  <span class="badge-conf" style="background:#fde8e8;color:#c0392b">🏥 Perlu Kunjungan Klinik</span>
+                {% endif %}
+              </div>
+
               <p class="text-xs leading-relaxed mt-1.5" style="color:var(--text-soft)">{{ r.description }}</p>
+              
               {% if r.advice %}
               <details class="mt-2">
                 <summary class="text-xs font-semibold cursor-pointer select-none" style="color:var(--purple-mid)">📋 Lihat info & saran penanganan lengkap</summary>
@@ -153,6 +166,7 @@
                 </ul>
               </details>
               {% endif %}
+
               <button onclick="openImageModal('/predictions/{{ r.id }}/image', '{{ r.label }}', '{{ r.confidence }}', '{{ r.color }}')"
                       class="mt-2 text-xs font-semibold hover:opacity-70 transition-opacity"
                       style="color:var(--purple-mid)">
@@ -184,49 +198,48 @@
               </div>
               {% endfor %}
 
-              <!-- Toggle form tambah catatan -->
-              <button type="button" onclick="toggleNoteForm({{ r.id }})"
-                      class="text-xs font-semibold hover:opacity-70 transition-opacity"
-                      style="color:var(--purple-mid)">
+              <!-- Form Tambah Catatan -->
+              <button type="button" onclick="toggleNoteForm({{ r.id }})" class="text-xs font-semibold hover:opacity-70 transition-opacity" style="color:var(--purple-mid)">
                 ✏️ Tambah Catatan
               </button>
-              <form id="note-form-{{ r.id }}" method="post"
-                    action="/dokter/patients/{{ patient.id }}/notes/{{ r.id }}"
-                    class="hidden mt-2 space-y-2">
-                <textarea name="note" rows="2" required placeholder="Tulis catatan medis untuk riwayat ini..."
-                          class="w-full text-xs rounded-lg p-2 border focus:outline-none"
-                          style="border-color:rgba(212,168,67,0.35);color:var(--text-dark)"></textarea>
+              <form id="note-form-{{ r.id }}" method="post" action="/dokter/patients/{{ patient.id }}/notes/{{ r.id }}" class="hidden mt-2 space-y-2">
+                <textarea name="note" rows="2" required placeholder="Tulis catatan medis untuk riwayat ini..." class="w-full text-xs rounded-lg p-2 border focus:outline-none" style="border-color:rgba(212,168,67,0.35);color:var(--text-dark)"></textarea>
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <label class="flex items-start gap-2 text-xs font-semibold" style="color:var(--text-mid)">
                     <input type="checkbox" name="need_visit" value="1" class="rounded mt-0.5 flex-shrink-0">
                     <span>🏥 Sarankan pasien berkunjung ke klinik</span>
                   </label>
-                  <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0 self-end sm:self-auto"
-                          style="background:var(--purple-mid);color:#fff">Simpan</button>
+                  <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0 self-end sm:self-auto" style="background:var(--purple-mid);color:#fff">Simpan</button>
                 </div>
               </form>
 
-              <!-- Konfirmasi Kunjungan -->
-              {% if r.visit_confirmed %}
-              <p class="mt-3 text-xs font-semibold" style="color:#1f9254">
-                ✅ Kunjungan dikonfirmasi{% if r.visit_confirmed_at %} · {{ r.visit_confirmed_at }}{% endif %}
-              </p>
+              <!-- Tombol Aksi & Informasi Status untuk Dokter -->
+              {% if r.visit_status == 'terjadwal' %}
+                <button type="button" onclick='openConfirmModal({{ r.id }}, {{ patient.id }}, {{ r | tojson }})'
+                        class="mt-3 text-xs font-bold px-3.5 py-2 rounded-xl text-white transition-transform hover:scale-[1.02] shadow-md flex items-center gap-1.5"
+                        style="background:var(--purple-mid)">
+                  🏥 Kelola Konfirmasi / Reschedule Kunjungan
+                </button>
+              {% elif r.visit_status == 'selesai' %}
+                <p class="mt-3 text-xs font-semibold" style="color:#1f9254">
+                  ✅ Kunjungan telah selesai
+                </p>
+              {% elif r.visit_status == 'batal' %}
+                {% if r.catatan_kunjungan and '[RESCHEDULE_DOKTER]' in r.catatan_kunjungan %}
+                  <p class="mt-3 text-xs font-semibold text-amber-700">
+                    🔄 Anda telah meminta pasien untuk reschedule. Menunggu pasien memilih jadwal baru di sistem.
+                  </p>
+                {% else %}
+                  <p class="mt-3 text-xs font-semibold text-red-600">
+                    ❌ Pasien telah membatalkan booking jadwal ini. Menunggu pasien memilih jadwal baru.
+                  </p>
+                {% endif %}
               {% elif r.doctor_notes and r.doctor_notes|selectattr("need_visit")|list|length > 0 %}
-              <button type="button" onclick="toggleVisitForm({{ r.id }})"
-                      class="mt-3 text-xs font-semibold hover:opacity-70 transition-opacity"
-                      style="color:#c0392b">
-                🏥 Konfirmasi Kunjungan
-              </button>
-              <form id="visit-form-{{ r.id }}" method="post"
-                    action="/dokter/patients/{{ patient.id }}/confirm-visit/{{ r.id }}"
-                    class="hidden mt-2 space-y-2">
-                <textarea name="catatan" rows="2" placeholder="Catatan kunjungan (opsional)..."
-                          class="w-full text-xs rounded-lg p-2 border focus:outline-none"
-                          style="border-color:rgba(192,57,43,0.35);color:var(--text-dark)"></textarea>
-                <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-bold"
-                        style="background:#c0392b;color:#fff">Konfirmasi Kunjungan Sekarang</button>
-              </form>
+                <p class="mt-3 text-xs font-semibold text-amber-700">
+                  ⏳ Menunggu pasien melakukan booking jadwal kedatangan di sistem.
+                </p>
               {% endif %}
+
             </div>
           </div>
         </div>
@@ -235,80 +248,81 @@
         {% endfor %}
       </div>
 
-      <!-- PAGINATION CONTROLS -->
+      <!-- PAGINATION -->
       {% if total_pages > 1 %}
       <div class="flex flex-col sm:flex-row items-center justify-between mt-8 pt-6 border-t gap-4" style="border-color:rgba(212,168,67,0.15)">
         <p class="text-xs font-semibold" style="color:var(--text-soft)">
           Menampilkan halaman <strong style="color:var(--purple-deep)">{{ page }}</strong> dari <strong>{{ total_pages }}</strong> (Total: {{ total_data }} analisis)
         </p>
-        
         <div class="flex flex-wrap justify-center gap-2">
-          
-          <!-- Tombol Awal -->
           {% if page > 1 %}
-          <a href="?page=1" class="px-3 py-2 rounded-xl text-xs font-bold transition-all border bg-white hover:bg-purple-50" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Pertama">
-            &laquo;
-          </a>
-          {% else %}
-          <button disabled class="px-3 py-2 rounded-xl text-xs font-bold border bg-gray-50 opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
-            &laquo;
-          </button>
+          <a href="?page=1" class="px-3 py-2 rounded-xl text-xs font-bold border bg-white hover:bg-purple-50" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&laquo;</a>
+          <a href="?page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-xs font-bold border bg-white hover:bg-purple-50" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&larr; Prev</a>
           {% endif %}
-
-          <!-- Sebelumnya -->
-          {% if page > 1 %}
-          <a href="?page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-xs font-bold transition-all border bg-white hover:bg-purple-50" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
-             &larr; Prev
-          </a>
-          {% else %}
-          <button disabled class="px-4 py-2 rounded-xl text-xs font-bold border bg-gray-50 opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
-             &larr; Prev
-          </button>
-          {% endif %}
-
-          <!-- Selanjutnya -->
           {% if page < total_pages %}
-          <a href="?page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-white shadow-md hover:opacity-90" style="background:var(--purple-mid)">
-             Next &rarr;
-          </a>
-          {% else %}
-          <button disabled class="px-4 py-2 rounded-xl text-xs font-bold text-white opacity-50 cursor-not-allowed" style="background:var(--purple-mid)">
-             Next &rarr;
-          </button>
+          <a href="?page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-md hover:opacity-90" style="background:var(--purple-mid)">Next &rarr;</a>
+          <a href="?page={{ total_pages }}" class="px-3 py-2 rounded-xl text-xs font-bold text-white shadow-md hover:opacity-90" style="background:var(--purple-mid)">&raquo;</a>
           {% endif %}
-
-          <!-- Tombol Akhir -->
-          {% if page < total_pages %}
-          <a href="?page={{ total_pages }}" class="px-3 py-2 rounded-xl text-xs font-bold transition-all text-white shadow-md hover:opacity-90" style="background:var(--purple-mid)" title="Halaman Terakhir">
-            &raquo;
-          </a>
-          {% else %}
-          <button disabled class="px-3 py-2 rounded-xl text-xs font-bold text-white opacity-50 cursor-not-allowed" style="background:var(--purple-mid)">
-            &raquo;
-          </button>
-          {% endif %}
-
         </div>
       </div>
       {% endif %}
-      <!-- BATAS PAGINATION -->
+    </div>
 
+    <!-- MODAL KONFIRMASI & RESCHEDULE DOKTER -->
+    <div id="confirm-visit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
+        <div class="flex items-center justify-between border-b pb-3 mb-4" style="border-color:var(--purple-pale)">
+          <h3 class="serif text-2xl font-bold" style="color:var(--purple-deep)">Konfirmasi Jadwal Kunjungan</h3>
+          <button onclick="closeConfirmModal()" class="text-gray-400 hover:text-gray-700 font-bold text-xl">✕</button>
+        </div>
+
+        <!-- Detail Booking dari User -->
+        <div class="p-4 rounded-2xl mb-5 border bg-purple-50/50" style="border-color:rgba(212,168,67,0.25)">
+          <p class="text-[11px] font-bold uppercase tracking-wider mb-1" style="color:var(--text-soft)">Detail Pilihan Pasien:</p>
+          <div class="flex items-center gap-2 text-sm font-bold" style="color:var(--purple-deep)">
+            <span>📅 Tanggal: <strong id="modal-booking-date" class="text-purple-700">—</strong></span>
+          </div>
+          <div class="flex items-center gap-2 text-sm font-bold mt-1" style="color:var(--purple-deep)">
+            <span>⏰ Jam: <strong id="modal-booking-time" class="text-purple-700">—</strong></span>
+          </div>
+        </div>
+
+        <form id="confirm-visit-form" method="POST" action="" class="space-y-4">
+          <div>
+            <label class="text-xs font-bold block mb-1" style="color:var(--text-dark)">Catatan Medis / Rujukan Dokter (Opsional)</label>
+            <textarea name="catatan" rows="3" placeholder="Tulis instruksi tambahan untuk owner / admin klinik..."
+                      class="w-full text-xs p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-purple-300"
+                      style="border-color:var(--purple-pale)"></textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-2">
+            <!-- Tombol Reschedule -->
+            <button type="submit" onclick="setFormAction('reschedule')" 
+                    class="py-3 px-4 rounded-xl text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 transition-colors">
+              🔄 Minta Reschedule
+            </button>
+
+            <!-- Tombol Konfirmasi -->
+            <button type="submit" onclick="setFormAction('confirm')" 
+                    class="py-3 px-4 rounded-xl text-xs font-bold text-white shadow-md transition-transform hover:scale-[1.02]" 
+                    style="background:var(--purple-mid)">
+              ✅ Setujui & Teruskan
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <!-- Modal preview gambar -->
-    <div id="img-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
-         style="background:rgba(26,17,40,0.75);backdrop-filter:blur(6px)"
-         onclick="closeImageModal()">
+    <div id="img-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" onclick="closeImageModal()">
       <div class="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-2xl" onclick="event.stopPropagation()">
-        <!-- Header modal -->
         <div class="flex items-center justify-between px-5 py-4" id="modal-header" style="background:var(--purple-deep)">
           <div>
             <p class="font-bold text-white text-sm" id="modal-label">—</p>
-            <p class="text-xs" id="modal-conf" style="color:#ffffff">—</p>
+            <p class="text-xs text-white" id="modal-conf">—</p>
           </div>
           <button onclick="closeImageModal()" class="text-white opacity-60 hover:opacity-100 text-xl font-bold">✕</button>
         </div>
-        <!-- Gambar -->
         <div style="background:#1a1128">
           <img id="modal-img" src="" alt="Preview" class="w-full object-contain" style="max-height:70vh">
         </div>
@@ -322,57 +336,56 @@
   Chart.defaults.font.family = "'DM Sans', sans-serif";
   Chart.defaults.color = '#8b7fb8';
 
-  // JS MEMBACA DATA FULL HISTORY (Semua Halaman) untuk keperluan grafik
   const records = {{ all_records | tojson }};
   if (records.length === 0) { document.getElementById('kpi-row').style.display = 'none'; }
 
-  function openImageModal(imageUrl, label, confidence, color) {
-    const modal      = document.getElementById('img-modal');
-    const modalImg    = document.getElementById('modal-img');
-    const modalLabel  = document.getElementById('modal-label');
-    const modalConf   = document.getElementById('modal-conf');
-    const modalHeader = document.getElementById('modal-header');
+  let currentPredictionId = null;
+  let currentPatientId = null;
 
-    modalImg.src = imageUrl;
-    modalLabel.textContent = label;
-    modalConf.textContent = confidence + '% yakin';
-    if (color) {
-      modalHeader.style.background = color;
+  function openConfirmModal(predId, patId, rowData) {
+    currentPredictionId = predId;
+    currentPatientId = patId;
+
+    document.getElementById('modal-booking-date').textContent = rowData.booking_date_formatted || 'Belum Booking';
+    document.getElementById('modal-booking-time').textContent = rowData.booking_time_formatted || '-';
+
+    document.getElementById('confirm-visit-modal').classList.remove('hidden');
+  }
+
+  function closeConfirmModal() {
+    document.getElementById('confirm-visit-modal').classList.add('hidden');
+  }
+
+  function setFormAction(type) {
+    const form = document.getElementById('confirm-visit-form');
+    if (type === 'confirm') {
+      form.action = '/dokter/patients/' + currentPatientId + '/confirm-visit/' + currentPredictionId;
+    } else {
+      form.action = '/dokter/patients/' + currentPatientId + '/reschedule-visit/' + currentPredictionId;
     }
+  }
 
+  function openImageModal(imageUrl, label, confidence, color) {
+    const modal = document.getElementById('img-modal');
+    document.getElementById('modal-img').src = imageUrl;
+    document.getElementById('modal-label').textContent = label;
+    document.getElementById('modal-conf').textContent = confidence + '% yakin';
+    if (color) document.getElementById('modal-header').style.background = color;
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden'; 
   }
 
   function closeImageModal() {
-    const modal = document.getElementById('img-modal');
-    modal.classList.add('hidden');
+    document.getElementById('img-modal').classList.add('hidden');
     document.body.style.overflow = '';
   }
 
   function toggleNoteForm(recordId) {
     const form = document.getElementById('note-form-' + recordId);
-    if (!form) return;
-    form.classList.toggle('hidden');
-    if (!form.classList.contains('hidden')) {
-      form.querySelector('textarea').focus();
-    }
+    if (form) form.classList.toggle('hidden');
   }
 
-  function toggleVisitForm(recordId) {
-    const form = document.getElementById('visit-form-' + recordId);
-    if (!form) return;
-    form.classList.toggle('hidden');
-    if (!form.classList.contains('hidden')) {
-      form.querySelector('textarea').focus();
-    }
-  }
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeImageModal();
-  });
-
-  // ── KPI ──────────────────────────────────────────────────────────────────
+  // Charts Script (KPI & Canvas)
   if (records.length > 0) {
     const freq = {};
     records.forEach(r => { freq[r.label] = (freq[r.label] || 0) + 1; });
@@ -381,115 +394,32 @@
 
     const avg = (records.reduce((s,r) => s + r.confidence, 0) / records.length).toFixed(1);
     document.getElementById('kpi-avg').textContent = avg + '%';
+    document.getElementById('kpi-last').textContent = records[0].created_at ? records[0].created_at.substring(0, 10) : '—';
 
-    const last = records[0];
-    document.getElementById('kpi-last').textContent = last.created_at
-      ? last.created_at.substring(0, 10) : '—';
-  }
-
-  // ── Donut: distribusi pasien ─────────────────────────────────────────────
-  if (records.length > 0) {
     const freq2 = {};
     records.forEach(r => {
       if (!freq2[r.label]) freq2[r.label] = { count: 0, color: r.color, emoji: r.emoji };
       freq2[r.label].count++;
     });
     const entries = Object.entries(freq2);
-    const dLabels = entries.map(([l, v]) => v.emoji + ' ' + l);
-    const dCounts = entries.map(([_, v]) => v.count);
-    const dColors = entries.map(([_, v]) => v.color);
 
     new Chart(document.getElementById('patientDonut'), {
       type: 'doughnut',
-      data: {
-        labels: dLabels,
-        datasets: [{ data: dCounts, backgroundColor: dColors.map(c => c+'dd'), borderColor:'#fff', borderWidth:3, hoverOffset:5 }]
-      },
-      options: {
-        cutout: '65%',
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw} sesi` } } },
-        animation: { duration: 700 }
-      }
+      data: { labels: entries.map(([l, v]) => v.emoji + ' ' + l), datasets: [{ data: entries.map(([_, v]) => v.count), backgroundColor: entries.map(([_, v]) => v.color+'dd') }] },
+      options: { cutout: '65%', plugins: { legend: { display: false } } }
     });
-
-    const legendEl = document.getElementById('donut-legend');
-    entries.forEach(([label, v]) => {
-      const pct = ((v.count / records.length) * 100).toFixed(0);
-      legendEl.innerHTML += `
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${v.color}"></span>
-            <span style="font-size:12px;font-weight:600;color:var(--text-mid)">${v.emoji} ${label}</span>
-          </div>
-          <span style="font-size:11px;font-weight:700;color:${v.color}">${pct}%</span>
-        </div>`;
-    });
-
-    const bLabels = entries.map(([l, v]) => v.emoji + ' ' + l);
-    const bCounts = entries.map(([_, v]) => v.count);
-    const bColors = entries.map(([_, v]) => v.color);
 
     new Chart(document.getElementById('patientBar'), {
       type: 'bar',
-      data: {
-        labels: bLabels,
-        datasets: [{
-          data: bCounts,
-          backgroundColor: bColors.map(c => c + 'cc'),
-          borderColor: bColors,
-          borderWidth: 2,
-          borderRadius: 8,
-          borderSkipped: false,
-        }]
-      },
-      options: {
-        indexAxis: 'x',
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: {
-          callbacks: { label: ctx => ` ${ctx.raw} sesi` }
-        }},
-        scales: {
-          y: { beginAtZero: true, grid: { color: '#ede8f8' }, ticks: { stepSize: 1 } },
-          x: { grid: { display: false } }
-        },
-        animation: { duration: 800 }
-      }
+      data: { labels: entries.map(([l, v]) => v.emoji + ' ' + l), datasets: [{ data: entries.map(([_, v]) => v.count), backgroundColor: entries.map(([_, v]) => v.color + 'cc') }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
     });
 
     const sorted = [...records].reverse();
-    const lineLabels = sorted.map((r, i) => '#' + (i + 1));
-    const lineData   = sorted.map(r => r.confidence);
-    const ptColors   = sorted.map(r => r.color);
-
     new Chart(document.getElementById('patientLine'), {
       type: 'line',
-      data: {
-        labels: lineLabels,
-        datasets: [{
-          label: 'Confidence (%)',
-          data: lineData,
-          borderColor: '#4c2fa0',
-          backgroundColor: 'rgba(76,47,160,0.07)',
-          borderWidth: 2.5,
-          tension: 0.35,
-          fill: true,
-          pointBackgroundColor: ptColors,
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-        }]
-      },
-      options: {
-        plugins: { legend: { display: false }, tooltip: {
-          callbacks: { label: ctx => ` ${ctx.raw}% keyakinan` }
-        }},
-        scales: {
-          y: { min: 0, max: 100, grid: { color: '#ede8f8' }, ticks: { callback: v => v + '%' } },
-          x: { grid: { display: false } }
-        },
-        animation: { duration: 700 }
-      }
+      data: { labels: sorted.map((r, i) => '#' + (i + 1)), datasets: [{ data: sorted.map(r => r.confidence), borderColor: '#4c2fa0', fill: true }] },
+      options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
     });
   }
 </script>

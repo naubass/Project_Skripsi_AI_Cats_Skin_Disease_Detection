@@ -170,14 +170,17 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         if not patient:
             raise HTTPException(status_code=404, detail="Pasien tidak ditemukan.")
 
-        if patient.get("created_at"):
+        if patient.get("created_at") and isinstance(patient["created_at"], datetime):
             patient["created_at"] = patient["created_at"].strftime("%d %b %Y")
 
-        # Ambil SELURUH data untuk grafik visual (charts)
+        # Ambil data prediksi beserta info booking dari laporan_kunjungan
         cursor.execute(
-            """SELECT id, predicted_class, label, confidence, description, created_at,
-                      visit_confirmed, visit_confirmed_at
-               FROM predictions WHERE user_id = %s ORDER BY created_at DESC""",
+            """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at,
+                      p.visit_confirmed, p.visit_confirmed_at,
+                      lk.status AS visit_status, lk.visit_date AS booking_datetime, lk.catatan_kunjungan
+               FROM predictions p
+               LEFT JOIN laporan_kunjungan lk ON lk.prediction_id = p.id
+               WHERE p.user_id = %s ORDER BY p.created_at DESC""",
             (patient_id,)
         )
         all_raw = cursor.fetchall()
@@ -185,14 +188,12 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         cursor.close()
         db.close()
 
-    # Hitung total data & halaman
     total_data = len(all_raw)
     total_pages = math.ceil(total_data / per_page) if total_data > 0 else 1
     if page < 1: page = 1
-
     offset = (page - 1) * per_page
     
-    # Format data untuk JS Chart (Full History)
+    # 1. Konversi ALL_RECORDS untuk JS Chart & JSON Serialization
     all_records = []
     for r in all_raw:
         info = disease_info.get(r["predicted_class"], {})
@@ -200,16 +201,18 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         row["emoji"] = info.get("emoji", "❓")
         row["color"] = info.get("color", "#888")
         row["visit_confirmed"] = bool(row.get("visit_confirmed"))
-        
-        # Konversi objek datetime menjadi string agar bisa dibaca oleh JSON/JS
-        if row.get("created_at"):
+
+        # Konversi SEMUA tipe datetime ke string agar aman untuk JSON
+        if row.get("created_at") and isinstance(row["created_at"], datetime):
             row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
-        if row.get("visit_confirmed_at"):
+        if row.get("visit_confirmed_at") and isinstance(row["visit_confirmed_at"], datetime):
             row["visit_confirmed_at"] = row["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
-            
+        if row.get("booking_datetime") and isinstance(row["booking_datetime"], datetime):
+            row["booking_datetime"] = row["booking_datetime"].strftime("%Y-%m-%d %H:%M")
+
         all_records.append(row)
 
-    # Slice data untuk tabel/log riwayat (Pagination per 10 data)
+    # 2. Slice Data untuk Tabel (Paginated)
     paginated_raw = all_raw[offset:offset+per_page]
     records = []
     prediction_ids = [r["id"] for r in paginated_raw]
@@ -221,18 +224,32 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         row["color"] = info.get("color", "#888")
         row["advice"] = info.get("advice", [])
         row["visit_confirmed"] = bool(row.get("visit_confirmed"))
-        if row.get("visit_confirmed_at"):
+        
+        # Konversi objek datetime untuk tampilan tabel
+        if row.get("booking_datetime") and isinstance(row["booking_datetime"], datetime):
+            b_dt = row["booking_datetime"]
+            row["booking_date_formatted"] = b_dt.strftime("%d %b %Y")
+            row["booking_time_formatted"] = b_dt.strftime("%H:%M WIB")
+            row["booking_full_formatted"] = b_dt.strftime("%d %b %Y, %H:%M WIB")
+            row["booking_datetime"] = b_dt.strftime("%Y-%m-%d %H:%M")
+        else:
+            row["booking_date_formatted"] = "Belum Memilih Tanggal"
+            row["booking_time_formatted"] = "-"
+            row["booking_full_formatted"] = "Belum ada jadwal booking dari user"
+            row["booking_datetime"] = ""
+
+        if row.get("visit_confirmed_at") and isinstance(row["visit_confirmed_at"], datetime):
             row["visit_confirmed_at"] = row["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
-        if row.get("created_at"):
+        if row.get("created_at") and isinstance(row["created_at"], datetime):
             row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
+            
         records.append(row)
 
-    # Hanya ambil catatan dokter untuk 10 data yang tampil di layar
     notes_map = get_doctor_notes_for_predictions(prediction_ids) if prediction_ids else {}
     for r in records:
         notes = notes_map.get(r["id"], [])
         for n in notes:
-            if n.get("created_at"):
+            if n.get("created_at") and isinstance(n["created_at"], datetime):
                 n["created_at"] = n["created_at"].strftime("%d %b %Y, %H:%M")
         r["doctor_notes"] = notes
 
@@ -292,11 +309,24 @@ async def dokter_confirm_visit(
     prediction_id: int,
     catatan: str = Form(""),
 ):
-    """
-    Dokter merekomendasikan kunjungan / mengonfirmasi ke sistem.
-    Ini membuat baris baru di laporan_kunjungan yang nantinya dikelola
-    oleh owner. Dokter akan dikembalikan ke halaman detail pasien.
-    """
+    """Dokter menyetujui jadwal booking dan meneruskannya ke Laporan Owner."""
+    user = require_role(request, ["dokter"])
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    confirm_visit(prediction_id, patient_id, user["id"], catatan.strip() or None)
+    log_activity(user["id"], "confirm_visit", f"Mengonfirmasi kunjungan #{prediction_id}")
+
+    return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)
+
+@router.post("/dokter/patients/{patient_id}/reschedule-visit/{prediction_id}")
+async def dokter_reschedule_visit(
+    request: Request,
+    patient_id: int,
+    prediction_id: int,
+    catatan: str = Form(""),
+):
+    """Dokter meminta reschedule. Status di-set 'batal' dengan penanda khusus."""
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -304,22 +334,35 @@ async def dokter_confirm_visit(
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT id FROM predictions WHERE id = %s AND user_id = %s",
-            (prediction_id, patient_id)
-        )
-        valid = cursor.fetchone()
+        # Gunakan penanda [RESCHEDULE_DOKTER] agar frontend bisa membedakannya dengan mutlak
+        pesan_reschedule = f"[RESCHEDULE_DOKTER] {catatan.strip()}" if catatan.strip() else "[RESCHEDULE_DOKTER] Dokter meminta Anda untuk memilih jadwal kunjungan ulang."
+        
+        cursor.execute("SELECT id FROM laporan_kunjungan WHERE prediction_id = %s", (prediction_id,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            cursor.execute(
+                """UPDATE laporan_kunjungan 
+                   SET status = 'batal', confirmed_by = NULL, catatan_kunjungan = %s 
+                   WHERE prediction_id = %s""",
+                (pesan_reschedule, prediction_id)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO laporan_kunjungan (prediction_id, user_id, patient_id, confirmed_by, status, catatan_kunjungan, created_at)
+                   VALUES (%s, %s, %s, NULL, 'batal', %s, NOW())""",
+                (prediction_id, patient_id, patient_id, pesan_reschedule)
+            )
+        db.commit()
     finally:
         cursor.close()
         db.close()
 
-    if not valid:
-        raise HTTPException(status_code=404, detail="Riwayat prediksi tidak ditemukan.")
+    if catatan.strip():
+        add_doctor_note(prediction_id, user["id"], f"⚠️ Mohon Reschedule Kunjungan: {catatan.strip()}", need_visit=True)
 
-    laporan_id = confirm_visit(prediction_id, patient_id, user["id"], catatan.strip() or None)
-    log_activity(user["id"], "confirm_visit", f"Meneruskan prediksi #{prediction_id} ke Laporan Kunjungan Owner")
+    log_activity(user["id"], "reschedule_visit", f"Meminta reschedule kunjungan #{prediction_id}")
 
-    # Redirect kembali ke halaman pasien (bukan ke halaman laporan owner)
     return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)
 
 

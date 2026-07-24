@@ -163,6 +163,39 @@
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Ctext x='6' y='40' font-size='28' fill='white'%3E🐾%3C/text%3E%3C/svg%3E");
       background-size: 60px 60px;
     }
+
+    /* ── Time Slot Buttons (Booking) ── */
+    .time-slot-btn {
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1.5px solid var(--purple-pale);
+      background: #fff;
+      color: var(--purple-deep);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .time-slot-btn:hover:not(:disabled) {
+      border-color: var(--purple-mid);
+      background: var(--purple-pale);
+    }
+    .time-slot-btn.selected {
+      background: var(--purple-mid) !important;
+      color: #fff !important;
+      border-color: var(--purple-mid) !important;
+      box-shadow: 0 4px 12px rgba(76,47,160,0.3);
+    }
+    /* Style Tombol Terkunci / Disabled */
+    .time-slot-btn:disabled {
+      background: #e5e7eb !important;
+      color: #9ca3af !important;
+      border-color: #d1d5db !important;
+      cursor: not-allowed !important;
+      text-decoration: line-through !important;
+      opacity: 0.7 !important;
+    }
   </style>
 </head>
 <body>
@@ -227,9 +260,7 @@
 </nav>
 
 
-<!-- ══════════════════════════════════════════════
-     HERO STRIP
-══════════════════════════════════════════════ -->
+<!-- HERO STRIP -->
 <div class="hero-strip pt-32 pb-14 px-6">
   <div class="paw-bg"></div>
   <div class="max-w-7xl mx-auto relative z-10">
@@ -250,39 +281,32 @@
 </div>
 
 
-<!-- ══════════════════════════════════════════════
-     MAIN CONTENT
-══════════════════════════════════════════════ -->
+<!-- MAIN CONTENT -->
 <main class="pb-24 px-6 -mt-6">
   <div class="max-w-7xl mx-auto">
 
     {% if records %}
 
-    <!-- ── Stat Summary Row ── -->
+    <!-- Stat Summary Row -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 afu afu-d1">
-
-      <!-- Total -->
       <div class="stat-card">
         <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Total Analisis</p>
         <p class="serif text-4xl font-bold" style="color:var(--purple-deep)">{{ total_data }}</p>
         <p class="text-xs mt-1" style="color:var(--text-soft)">prediksi dilakukan</p>
       </div>
 
-      <!-- Avg confidence — dihitung JS -->
       <div class="stat-card">
         <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Rata-rata Confidence</p>
         <p class="serif text-4xl font-bold" style="color:var(--purple-mid)" id="stat-avg">—</p>
         <p class="text-xs mt-1" style="color:var(--text-soft)">tingkat keyakinan AI</p>
       </div>
 
-      <!-- Kondisi terbanyak — JS -->
       <div class="stat-card">
         <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Kondisi Terbanyak</p>
         <p class="serif text-2xl font-bold leading-tight" style="color:var(--purple-deep)" id="stat-top-label">—</p>
         <p class="text-xs mt-1" style="color:var(--text-soft)" id="stat-top-count"></p>
       </div>
 
-      <!-- Analisis terbaru -->
       <div class="stat-card">
         <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Analisis Terbaru</p>
         <p class="serif text-xl font-bold leading-tight" style="color:var(--purple-deep)">
@@ -292,14 +316,11 @@
           {{ records[0].created_at.strftime('%H:%M WIB') if records[0].created_at else '' }}
         </p>
       </div>
-
     </div>
 
 
-    <!-- ── Charts Row ── -->
+    <!-- Charts Row -->
     <div class="grid md:grid-cols-3 gap-5 mb-8 afu afu-d2">
-
-      <!-- Donut: Distribusi Kondisi -->
       <div class="chart-card flex flex-col">
         <span class="eyebrow mb-3">📊 Distribusi</span>
         <p class="serif text-xl font-bold mb-4" style="color:var(--purple-deep)">Breakdown Kondisi</p>
@@ -315,7 +336,6 @@
         </div>
       </div>
 
-      <!-- Line: Tren Confidence -->
       <div class="chart-card md:col-span-2 flex flex-col">
         <span class="eyebrow mb-3">📈 Tren Waktu</span>
         <p class="serif text-xl font-bold mb-4" style="color:var(--purple-deep)">Confidence per Sesi Analisis</p>
@@ -323,7 +343,6 @@
           <canvas id="chartLine"></canvas>
         </div>
       </div>
-
     </div>
 
 
@@ -342,7 +361,7 @@
     </div>
 
 
-    <!-- ── History List ── -->
+    <!-- History List -->
     <div class="afu afu-d4">
       <div class="flex items-center justify-between mb-5">
         <div>
@@ -357,7 +376,6 @@
         {% for r in records %}
         <div class="card-hist" style="flex-direction:column;align-items:stretch;gap:0;">
           <div class="flex gap-3">
-            <!-- No + Foto -->
             <div class="flex-shrink-0 flex flex-col items-center gap-1">
               <span class="text-[10px] font-black" style="color:var(--text-soft)">{{ loop.index }}</span>
               <div class="w-14 h-14 rounded-xl overflow-hidden border-2 cursor-pointer"
@@ -370,7 +388,6 @@
               </div>
             </div>
 
-            <!-- Info -->
             <div class="flex-1 min-w-0">
               <div class="flex items-start justify-between gap-2">
                 <span class="font-bold text-sm leading-tight" style="color:var(--purple-deep)">{{ r.label }}</span>
@@ -388,18 +405,35 @@
                 <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">
                   {{ r.confidence }}% yakin
                 </span>
+                
                 {% if r.doctor_notes %}
                 <span class="badge-conf" style="background:var(--purple-pale);color:var(--purple-mid)">
                   🩺 {{ r.doctor_notes|length }} catatan
                 </span>
                 {% endif %}
-                {% if r.visit_confirmed %}
+
+                <!-- BADGE STATUS PRESISI UNTUK USER / HISTORY -->
+                {% if r.visit_status == 'selesai' %}
                 <span class="badge-conf" style="background:#e6f7ec;color:#1f9254">
-                  ✅ Sudah kunjungan
+                  ✅ Sudah Kunjungan
                 </span>
+                {% elif r.visit_status == 'terjadwal' %}
+                <span class="badge-conf" style="background:#fef3c7;color:#b45309">
+                  ⏳ Terjadwal: {{ r.booking_formatted }}
+                </span>
+                {% elif r.visit_status == 'batal' %}
+                  {% if r.catatan_kunjungan and '[RESCHEDULE_DOKTER]' in r.catatan_kunjungan %}
+                  <span class="badge-conf" style="background:#fee2e2;color:#b91c1c">
+                    🔄 Minta Reschedule
+                  </span>
+                  {% else %}
+                  <span class="badge-conf" style="background:#fee2e2;color:#b91c1c">
+                    ❌ Booking Dibatalkan
+                  </span>
+                  {% endif %}
                 {% elif r.need_visit %}
                 <span class="badge-conf" style="background:#fde8e8;color:#c0392b">
-                  🏥 Perlu kunjungan
+                  🏥 Perlu Kunjungan
                 </span>
                 {% endif %}
               </div>
@@ -409,7 +443,7 @@
               <button onclick="openDetailModal('{{ r.id }}')"
                       class="mt-1.5 text-[11px] font-semibold hover:opacity-70 transition-opacity"
                       style="color:var(--purple-mid)">
-                📄 Lihat detail →
+                📄 Lihat detail & booking →
               </button>
             </div>
           </div>
@@ -417,65 +451,30 @@
         {% endfor %}
       </div>
 
-      <!-- KODE PAGINATION KAMU DI SINI -->
+      <!-- Pagination -->
       {% if total_pages > 1 %}
       <div class="flex flex-wrap items-center justify-center gap-2 mt-8 afu">
-        
-        <!-- Tombol Awal (Halaman 1) -->
         {% if page > 1 %}
-        <a href="?page=1" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Pertama">
-          &laquo;
-        </a>
+        <a href="?page=1" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&laquo;</a>
+        <a href="?page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&larr; Prev</a>
         {% else %}
-        <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
-          &laquo;
-        </span>
+        <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">&laquo;</span>
+        <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">&larr; Prev</span>
         {% endif %}
 
-        <!-- Tombol Sebelumnya -->
-        {% if page > 1 %}
-        <a href="?page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
-          &larr; Prev
-        </a>
-        {% else %}
-        <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
-          &larr; Prev
-        </span>
-        {% endif %}
-
-        <!-- Info Halaman -->
         <span class="px-4 py-2 text-sm font-bold rounded-xl shadow-sm" style="background:var(--purple-pale); color:var(--purple-mid)">
           Hal {{ page }} / {{ total_pages }}
         </span>
 
-        <!-- Tombol Selanjutnya -->
         {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
-          Next &rarr;
-        </a>
-        {% else %}
-        <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
-          Next &rarr;
-        </span>
+        <a href="?page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">Next &rarr;</a>
+        <a href="?page={{ total_pages }}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&raquo;</a>
         {% endif %}
-
-        <!-- Tombol Akhir (Halaman Terakhir) -->
-        {% if page < total_pages %}
-        <a href="?page={{ total_pages }}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Terakhir">
-          &raquo;
-        </a>
-        {% else %}
-        <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
-          &raquo;
-        </span>
-        {% endif %}
-
       </div>
       {% endif %}
-      <!-- BATAS PAGINATION -->
     </div>
 
-    <!-- Modal Detail Riwayat -->
+    <!-- Modal Detail Riwayat & Booking -->
     <div id="detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
          style="background:rgba(26,17,40,0.75);backdrop-filter:blur(6px)"
          onclick="closeDetailModal()">
@@ -489,15 +488,13 @@
           <button onclick="closeDetailModal()" class="text-white opacity-60 hover:opacity-100 text-xl font-bold">✕</button>
         </div>
 
-        <!-- Body (scrollable) -->
+        <!-- Body -->
         <div class="overflow-y-auto">
-          <!-- Gambar -->
           <div style="background:#1a1128">
             <img id="modal-img" src="" alt="Preview" class="w-full object-contain" style="max-height:40vh">
           </div>
 
           <div class="p-5 space-y-5">
-            <!-- Deskripsi & saran penanganan -->
             <div>
               <span class="eyebrow mb-2">🩻 Info Kondisi</span>
               <p class="text-sm mt-2 leading-relaxed" id="modal-description" style="color:var(--text-dark)">—</p>
@@ -510,31 +507,81 @@
               <div id="modal-notes" class="mt-2 space-y-2"></div>
             </div>
 
-            <!-- Notifikasi perlu kunjungan + info klinik -->
-            <div id="modal-visit-alert" class="hidden rounded-xl p-4" style="background:#fdeceb;border:1px solid #f3b9b3">
-              <p class="text-sm font-bold mb-2" style="color:#c0392b">🏥 Dokter menyarankan kunjungan langsung ke klinik</p>
+            <!-- Notifikasi perlu kunjungan + Form Booking -->
+            <div id="modal-visit-alert" class="hidden rounded-2xl p-4 transition-all" style="background:#fdeceb;border:1px solid #f3b9b3">
+              <p class="text-sm font-bold mb-1" style="color:#c0392b">🏥 Dokter menyarankan kunjungan langsung ke klinik</p>
               <p class="text-xs font-semibold" style="color:var(--text-dark)">{{ clinic.name }}</p>
-              <p class="text-xs mt-1" style="color:var(--text-mid)">
+              <p class="text-xs mt-0.5" style="color:var(--text-mid)">
                 <a href="{{ clinic.phone_wa_link }}" target="_blank" class="font-semibold hover:opacity-70" style="color:var(--purple-mid)">{{ clinic.phone }}</a>
                 · {{ clinic.address }}
               </p>
-              <div class="mt-2">
-                {% for h in clinic.hours %}
-                <p class="text-[11px]" style="color:var(--text-mid)"><span class="font-semibold">{{ h.days }}:</span> {{ h.time }}</p>
-                {% endfor %}
+
+              <!-- KOTAK NOTIFIKASI JIKA DOKTER MEMINTA RESCHEDULE -->
+              <div id="reschedule-info-box" class="hidden mt-3 p-3 bg-red-100 border border-red-300 rounded-xl">
+                <p class="text-xs font-bold text-red-800">⚠️ Dokter Meminta Reschedule Jadwal:</p>
+                <p class="text-xs font-semibold text-red-900 mt-1" id="reschedule-reason-text">—</p>
+                <p class="text-[11px] text-red-700 mt-1 italic">* Silakan pilih tanggal & jam kedatangan baru di bawah ini.</p>
               </div>
+
+              <!-- KOTAK INFO JIKA SUDAH TERJADWAL -->
+              <div id="scheduled-info-box" class="hidden mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <p class="text-xs font-bold text-amber-800">⏳ Jadwal Kunjungan Anda Saat Ini:</p>
+                <p class="text-xs font-semibold text-amber-900 mt-1" id="scheduled-time-text">—</p>
+              </div>
+
+              <!-- Form Booking Slot Jam -->
+              <form id="booking-form" method="POST" action="" class="mt-4 p-3.5 bg-white rounded-xl border space-y-3 shadow-sm" style="border-color:rgba(212,168,67,0.3)">
+                <p class="text-xs font-bold" style="color:var(--purple-deep)">📅 Pilih Jadwal Kedatangan Anda:</p>
+                
+                <div>
+                  <label class="text-[11px] font-bold block mb-1" style="color:var(--text-soft)">Pilih Tanggal *</label>
+                  <input type="date" name="visit_date" id="booking-date" required onchange="fetchBookedSlots()" 
+                         class="w-full text-xs p-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-300"
+                         style="border-color:var(--purple-pale); color:var(--text-dark)">
+                </div>
+
+                <div>
+                  <label class="text-[11px] font-bold block mb-1" style="color:var(--text-soft)">Pilih Jam Kunjungan *</label>
+                  <input type="hidden" name="visit_time" id="selected-time-input" required>
+                  
+                  <!-- Grid Slot Jam -->
+                  <div class="grid grid-cols-4 gap-1.5" id="time-slots-grid">
+                    <button type="button" class="time-slot-btn" onclick="selectTimeSlot('09:00', this)">09:00</button>
+                    <button type="button" class="time-slot-btn" onclick="selectTimeSlot('10:00', this)">10:00</button>
+                    <button type="button" class="time-slot-btn" onclick="selectTimeSlot('11:00', this)">11:00</button>
+                    <button type="button" class="time-slot-btn" onclick="selectTimeSlot('14:00', this)">14:00</button>
+                    <button type="button" class="time-slot-btn" onclick="selectTimeSlot('15:00', this)">15:00</button>
+                    <button type="button" class="time-slot-btn" onclick="selectTimeSlot('16:00', this)">16:00</button>
+                    <button type="button" class="time-slot-btn" onclick="selectTimeSlot('19:00', this)">19:00</button>
+                    <button type="button" class="time-slot-btn" onclick="selectTimeSlot('20:00', this)">20:00</button>
+                  </div>
+                  <p class="text-[10px] mt-1.5" style="color:var(--text-soft)">* Jam bergaris coret & berwarna abu-abu menandakan slot sudah dipesan pengguna lain.</p>
+                </div>
+
+                <button type="submit" class="w-full py-2.5 text-xs font-bold text-white rounded-xl transition-transform hover:scale-[1.01] shadow-md" style="background:var(--purple-mid)">
+                  📌 Konfirmasi & Booking Jadwal
+                </button>
+              </form>
+
+              <!-- Form Pembatalan Booking -->
+              <form id="cancel-booking-form" method="POST" action="" class="hidden mt-3">
+                <button type="submit" onclick="return confirm('Apakah Anda yakin ingin membatalkan jadwal booking ini?')" 
+                        class="w-full py-2 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold rounded-xl transition-colors">
+                  ❌ Batalkan Booking Kunjungan
+                </button>
+              </form>
             </div>
 
-            <!-- Info kunjungan sudah dikonfirmasi -->
+            <!-- Info kunjungan selesai -->
             <div id="modal-visit-done" class="hidden rounded-xl p-4" style="background:#e6f7ec;border:1px solid #a7dfba">
-              <p class="text-sm font-bold" style="color:#1f9254">✅ Kunjungan ke klinik sudah dikonfirmasi oleh dokter</p>
+              <p class="text-sm font-bold" style="color:#1f9254">✅ Kunjungan ke klinik sudah dikonfirmasi / selesai</p>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Info Klinik -->
+    <!-- Info Klinik Footer -->
     <div class="chart-card mt-8 afu afu-d4">
       <span class="eyebrow mb-3">🏥 Butuh Konsultasi Langsung?</span>
       <p class="serif text-xl font-bold mt-2 mb-4" style="color:var(--purple-deep)">{{ clinic.name }}</p>
@@ -558,24 +605,11 @@
 
     {% else %}
 
-    <!-- Empty State -->
     <div class="text-center py-32 afu">
-      <div class="w-24 h-24 rounded-full flex items-center justify-center text-5xl mx-auto mb-6"
-           style="background:var(--purple-pale)">📭</div>
+      <div class="w-24 h-24 rounded-full flex items-center justify-center text-5xl mx-auto mb-6" style="background:var(--purple-pale)">📭</div>
       <h3 class="serif text-2xl font-bold mb-2" style="color:var(--purple-deep)">Belum Ada Riwayat</h3>
-      <p class="text-sm mb-8 max-w-xs mx-auto" style="color:var(--text-soft)">
-        Mulai analisis pertama Anda dan hasilnya akan tersimpan di sini secara otomatis.
-      </p>
+      <p class="text-sm mb-8 max-w-xs mx-auto" style="color:var(--text-soft)">Mulai analisis pertama Anda dan hasilnya akan tersimpan di sini secara otomatis.</p>
       <a href="/#analyze" class="btn-gold px-8 py-3.5 rounded-2xl inline-block text-sm">🔬 Mulai Analisis Pertama</a>
-    </div>
-
-    <div class="chart-card mt-8 afu max-w-2xl mx-auto text-center">
-      <span class="eyebrow mb-3">🏥 Butuh Konsultasi Langsung?</span>
-      <p class="serif text-xl font-bold mt-2 mb-2" style="color:var(--purple-deep)">{{ clinic.name }}</p>
-      <p class="text-sm mb-1" style="color:var(--text-mid)">
-        <a href="{{ clinic.phone_wa_link }}" target="_blank" class="font-semibold hover:opacity-70" style="color:var(--purple-mid)">{{ clinic.phone }}</a>
-        · {{ clinic.address }}
-      </p>
     </div>
 
     {% endif %}
@@ -584,27 +618,27 @@
 </main>
 
 
-<!-- ══════════════════════════════════════════════
-     SCRIPTS
-══════════════════════════════════════════════ -->
+<!-- SCRIPTS -->
 <script>
-/* ── Dropdown ── */
 function toggleNavDropdown() {
   const menu    = document.getElementById('nav-dropdown-menu');
   const chevron = document.getElementById('nav-chevron');
   const hidden  = menu.classList.contains('hidden');
   menu.classList.toggle('hidden', !hidden);
-  chevron.style.transform = hidden ? 'rotate(180deg)' : '';
+  if (chevron) chevron.style.transform = hidden ? 'rotate(180deg)' : '';
 }
+
 document.addEventListener('click', e => {
   const w = document.getElementById('nav-dropdown-wrapper');
   if (w && !w.contains(e.target)) {
-    document.getElementById('nav-dropdown-menu').classList.add('hidden');
-    document.getElementById('nav-chevron').style.transform = '';
+    const menu = document.getElementById('nav-dropdown-menu');
+    const chevron = document.getElementById('nav-chevron');
+    if (menu) menu.classList.add('hidden');
+    if (chevron) chevron.style.transform = '';
   }
 });
 
-/* ── Modal Detail Riwayat ── */
+/* ── Modal Detail Riwayat & Booking ── */
 function openDetailModal(id) {
   const rec = RECORD_DETAILS[id];
   if (!rec) return;
@@ -655,8 +689,63 @@ function openDetailModal(id) {
     modalNotesWrap.classList.add('hidden');
   }
 
-  modalAlert.classList.toggle('hidden', !rec.need_visit || rec.visit_confirmed);
-  modalVisitDone.classList.toggle('hidden', !rec.visit_confirmed);
+  // Handle Form Booking & Reschedule Info
+  const bookingForm   = document.getElementById('booking-form');
+  const cancelForm    = document.getElementById('cancel-booking-form');
+  const scheduledBox  = document.getElementById('scheduled-info-box');
+  const scheduledText = document.getElementById('scheduled-time-text');
+  const rescheduleBox = document.getElementById('reschedule-info-box');
+  const rescheduleText = document.getElementById('reschedule-reason-text');
+
+  if (rec.need_visit && rec.visit_status !== 'selesai') {
+    modalAlert.classList.remove('hidden');
+    modalVisitDone.classList.add('hidden');
+
+    bookingForm.action = '/predictions/' + id + '/book';
+    cancelForm.action  = '/predictions/' + id + '/cancel-booking';
+
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('booking-date');
+    dateInput.min = today;
+
+    if (rec.visit_status === 'terjadwal') {
+      scheduledBox.classList.remove('hidden');
+      rescheduleBox.classList.add('hidden');
+      scheduledText.textContent = rec.booking_formatted;
+      cancelForm.classList.remove('hidden'); 
+      bookingForm.classList.add('hidden');  
+    } else if (rec.visit_status === 'batal') {
+      // DOKTER MINTA RESCHEDULE
+      scheduledBox.classList.add('hidden');
+      cancelForm.classList.add('hidden');
+      bookingForm.classList.remove('hidden');
+      
+      // TAMPILKAN ALASAN RESCHEDULE DARI DOKTER
+      if (rec.catatan_kunjungan) {
+        rescheduleBox.classList.remove('hidden');
+        rescheduleText.textContent = rec.catatan_kunjungan;
+      } else {
+        rescheduleBox.classList.add('hidden');
+      }
+
+      dateInput.value = today;
+      setTimeout(fetchBookedSlots, 50); // Panggil pengecekan slot jam
+    } else {
+      // BELUM BOOKING
+      scheduledBox.classList.add('hidden');
+      rescheduleBox.classList.add('hidden');
+      cancelForm.classList.add('hidden');
+      bookingForm.classList.remove('hidden');
+      dateInput.value = today;
+      setTimeout(fetchBookedSlots, 50); // Panggil pengecekan slot jam
+    }
+  } else if (rec.visit_status === 'selesai') {
+    modalAlert.classList.add('hidden');
+    modalVisitDone.classList.remove('hidden');
+  } else {
+    modalAlert.classList.add('hidden');
+    modalVisitDone.classList.add('hidden');
+  }
 
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -673,6 +762,51 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/* ── Slot Jam Interaktif ── */
+function selectTimeSlot(timeStr, btn) {
+  document.querySelectorAll('.time-slot-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('selected-time-input').value = timeStr;
+}
+
+/* ── AJAX Pengecekan Slot Terpakai (PASTI MATI & ABU-ABU) ── */
+async function fetchBookedSlots() {
+  const dateInput = document.getElementById('booking-date');
+  if (!dateInput || !dateInput.value) return;
+
+  const dateVal = dateInput.value;
+
+  // 1. Reset seluruh tombol slot jam ke keadaan aktif
+  document.querySelectorAll('.time-slot-btn').forEach(b => {
+    b.classList.remove('selected');
+    b.disabled = false;
+    b.style.pointerEvents = 'auto';
+  });
+  document.getElementById('selected-time-input').value = '';
+
+  try {
+    // 2. Fetch slot jam terpakai dari backend
+    const res = await fetch('/api/booked-slots?date=' + encodeURIComponent(dateVal));
+    const data = await res.json();
+    const booked = data.booked_slots || [];
+
+    // 3. Cocokkan dan matikan tombol yang jamnya sudah terisi
+    document.querySelectorAll('.time-slot-btn').forEach(btn => {
+      const timeVal = btn.textContent.trim(); // contoh: "10:00" atau "20:00"
+      
+      // Pencocokan presisi string jam
+      const isBooked = booked.some(slot => slot.substring(0, 5) === timeVal);
+      
+      if (isBooked) {
+        btn.disabled = true;
+        btn.style.pointerEvents = 'none'; // Kunci klik dari CSS
+      }
+    });
+  } catch (e) {
+    console.error("Gagal mengambil data slot jam terpakai:", e);
+  }
+}
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeDetailModal();
 });
@@ -680,9 +814,7 @@ document.addEventListener('keydown', (e) => {
 
 {% if records %}
 <script>
-/* ══════════════════════════════════════════════
-   DETAIL RIWAYAT (untuk modal) — dari Jinja2
-══════════════════════════════════════════════ */
+/* ── DETAIL RIWAYAT DARI JINJA2 ── */
 const RECORD_DETAILS = {
   {% for r in records %}
   "{{ r.id }}": {
@@ -694,7 +826,11 @@ const RECORD_DETAILS = {
     advice: {{ r.advice|tojson }},
     created_at: {{ (r.created_at.strftime('%d %b %Y, %H:%M') if r.created_at else '-')|tojson }},
     need_visit: {{ 'true' if r.need_visit else 'false' }},
-    visit_confirmed: {{ 'true' if r.visit_confirmed else 'false' }},
+    visit_status: {{ (r.visit_status or '')|tojson }},
+    catatan_kunjungan: {{ (r.catatan_kunjungan or '')|tojson }},
+    booking_date: {{ (r.booking_date if r.booking_date else '')|tojson }},
+    booking_time: {{ (r.booking_time if r.booking_time else '')|tojson }},
+    booking_formatted: {{ (r.booking_formatted if r.booking_formatted else '')|tojson }},
     notes: [
       {% for n in r.doctor_notes %}
       {
@@ -708,14 +844,8 @@ const RECORD_DETAILS = {
   }{% if not loop.last %},{% endif %}
   {% endfor %}
 };
-</script>
-{% endif %}
 
-{% if records %}
-<script>
-/* ══════════════════════════════════════════════
-   DATA DARI JINJA2
-══════════════════════════════════════════════ */
+/* ── DATA FULL HISTORY CHART ── */
 const RAW = [
   {% for r in all_records %}
   {
@@ -728,14 +858,10 @@ const RAW = [
   {% endfor %}
 ];
 
-/* ══════════════════════════════════════════════
-   STAT CARDS (JS)
-══════════════════════════════════════════════ */
-// Avg confidence
+/* ── STAT CARDS ── */
 const avg = (RAW.reduce((s, r) => s + r.confidence, 0) / RAW.length).toFixed(1);
 document.getElementById('stat-avg').textContent = avg + '%';
 
-// Top condition
 const freq = {};
 RAW.forEach(r => {
   if (!freq[r.label]) freq[r.label] = { count: 0, color: r.color, emoji: r.emoji };
@@ -745,9 +871,7 @@ const topKey = Object.keys(freq).sort((a, b) => freq[b].count - freq[a].count)[0
 document.getElementById('stat-top-label').textContent = freq[topKey].emoji + ' ' + topKey;
 document.getElementById('stat-top-count').textContent = freq[topKey].count + '× terdeteksi';
 
-/* ══════════════════════════════════════════════
-   CHART DEFAULTS
-══════════════════════════════════════════════ */
+/* ── CHARTS CONFIG ── */
 Chart.defaults.font.family = "'DM Sans', sans-serif";
 Chart.defaults.color       = '#8b7fb8';
 
@@ -756,9 +880,7 @@ const freqCounts = freqLabels.map(k => freq[k].count);
 const freqColors = freqLabels.map(k => freq[k].color);
 const freqEmojis = freqLabels.map(k => freq[k].emoji);
 
-/* ══════════════════════════════════════════════
-   1. DONUT — Distribusi Kondisi
-══════════════════════════════════════════════ */
+/* 1. DONUT */
 new Chart(document.getElementById('chartDonut'), {
   type: 'doughnut',
   data: {
@@ -773,17 +895,11 @@ new Chart(document.getElementById('chartDonut'), {
   },
   options: {
     cutout: '66%',
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: { label: ctx => `  ${ctx.label}: ${ctx.raw}×` }
-      }
-    },
+    plugins: { legend: { display: false } },
     animation: { animateRotate: true, duration: 1000 }
   }
 });
 
-// Legend manual
 const legendEl = document.getElementById('donut-legend');
 freqLabels.forEach((label, i) => {
   const pct = ((freqCounts[i] / RAW.length) * 100).toFixed(0);
@@ -797,9 +913,7 @@ freqLabels.forEach((label, i) => {
     </div>`;
 });
 
-/* ══════════════════════════════════════════════
-   2. LINE — Confidence over Time
-══════════════════════════════════════════════ */
+/* 2. LINE */
 const lineData = [...RAW].reverse();
 new Chart(document.getElementById('chartLine'), {
   type: 'line',
@@ -819,8 +933,6 @@ new Chart(document.getElementById('chartLine'), {
       pointBorderColor: '#fff',
       pointBorderWidth: 2,
       pointRadius: 5,
-      pointHoverRadius: 7,
-      fill: true,
       tension: 0.42,
       borderWidth: 2.5,
     }]
@@ -829,66 +941,36 @@ new Chart(document.getElementById('chartLine'), {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
-      y: {
-        min: 0, max: 100,
-        ticks: { callback: v => v + '%', font: { size: 11 }, maxTicksLimit: 5 },
-        grid: { color: 'rgba(237,232,248,0.6)' }
-      },
-      x: {
-        ticks: { font: { size: 10 }, maxTicksLimit: 8 },
-        grid: { display: false }
-      }
+      y: { min: 0, max: 100, grid: { color: 'rgba(237,232,248,0.6)' } },
+      x: { grid: { display: false } }
     },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: ctx => `  ${lineData[ctx.dataIndex].emoji} ${lineData[ctx.dataIndex].label}: ${ctx.raw}%`
-        }
-      }
-    },
+    plugins: { legend: { display: false } },
     animation: { duration: 1000 }
   }
 });
 
-/* ══════════════════════════════════════════════
-   3. BAR — Frekuensi per Kondisi
-══════════════════════════════════════════════ */
+/* 3. BAR */
 new Chart(document.getElementById('chartBar'), {
   type: 'bar',
   data: {
     labels: freqLabels.map((l, i) => freqEmojis[i] + '  ' + l),
     datasets: [{
-      label: 'Jumlah Deteksi',
       data: freqCounts,
       backgroundColor: freqColors.map(c => c + 'bb'),
       borderColor: freqColors,
       borderWidth: 2,
       borderRadius: 12,
-      borderSkipped: false,
     }]
   },
   options: {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
-      y: {
-        beginAtZero: true,
-        ticks: { stepSize: 1, font: { size: 11 } },
-        grid: { color: 'rgba(237,232,248,0.6)' }
-      },
-      x: {
-        grid: { display: false },
-        ticks: { font: { size: 12 } }
-      }
+      y: { beginAtZero: true, grid: { color: 'rgba(237,232,248,0.6)' } },
+      x: { grid: { display: false } }
     },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: { label: ctx => `  ${ctx.raw}× terdeteksi` }
-      }
-    },
-    animation: { duration: 1000, delay: ctx => ctx.dataIndex * 80 }
+    plugins: { legend: { display: false } },
+    animation: { duration: 1000 }
   }
 });
 </script>

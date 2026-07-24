@@ -1,47 +1,26 @@
 """
-database.py — Koneksi MySQL dan inisialisasi tabel
-
-Konfigurasi via environment variable atau langsung di DB_CONFIG di bawah.
-Sesuaikan DB_CONFIG dengan setting MySQL kamu.
+database.py — Koneksi MySQL, inisialisasi tabel, migrasi otomatis,
+dan fungsi helper data.
 """
 
 import os
 import mysql.connector
 from mysql.connector import Error
+from datetime import datetime
 
 # ── Konfigurasi ────────────────────────────────────────────────────────────────
 DB_CONFIG = {
-    "host"    : os.getenv("DB_HOST",     "localhost"),
-    "port"    : int(os.getenv("DB_PORT", "3306")),
-    "user"    : os.getenv("DB_USER",     "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
-    "database": os.getenv("DB_NAME",     "catskindisease"),
-    # PENTING: tanpa connect_timeout, mysql.connector bisa hang TANPA BATAS
-    # WAKTU dan TANPA ERROR kalau host tidak merespon (umum terjadi dengan
-    # proxy publik seperti Railway TCP proxy yang sesekali lambat/hang dari
-    # luar jaringannya). Timeout pendek di sini dikombinasikan dengan retry
-    # di _connect_with_retry() supaya total waktu tunggu tetap terbatas,
-    # dan kalau gagal kamu dapat error jelas, bukan startup yang diam.
-    "connect_timeout": 5,
+    "host"            : os.getenv("DB_HOST",     "localhost"),
+    "port"            : int(os.getenv("DB_PORT", "3306")),
+    "user"            : os.getenv("DB_USER",     "root"),
+    "password"        : os.getenv("DB_PASSWORD", ""),
+    "database"        : os.getenv("DB_NAME",     "catskindisease"),
+    "connect_timeout" : 5,
 }
 
 # ── Koneksi dengan retry ─────────────────────────────────────────────────────────
 def _connect_with_retry(config: dict, max_retries: int = 3, delay: int = 3):
-    """
-    Connect ke MySQL dengan retry. Railway (dan proxy publik sejenis) kadang
-    mengalami koneksi pertama yang hang/lambat dari luar jaringannya sendiri.
-    Daripada bergantung pada satu kali percobaan, kita coba beberapa kali
-    dengan connect_timeout pendek per percobaan (lihat DB_CONFIG) — supaya
-    prosesnya lebih cepat ketahuan gagal/berhasil, bukan diam lama.
-
-    CATATAN: sengaja TIDAK menambahkan ThreadPoolExecutor/nested-thread di
-    sini untuk membatasi waktu connect secara manual. mysql.connector punya
-    native C extension, dan menjalankannya di dalam thread bersarang
-    (apalagi saat dipanggil dari background thread lain seperti init_db())
-    berisiko memicu segfault akibat konflik native code — ini yang terjadi
-    sebelumnya. connect_timeout di level driver sudah cukup selama urutan
-    import di app.py benar (mysql.connector diimpor sebelum numpy/tensorflow).
-    """
+    """Connect ke MySQL dengan mekanisme retry."""
     last_error = None
     for attempt in range(1, max_retries + 1):
         try:
@@ -63,7 +42,7 @@ def get_db() -> mysql.connector.MySQLConnection:
     return _connect_with_retry(DB_CONFIG)
 
 
-# ── Disease info default (dipakai untuk seed pertama kali saja) ───────────────
+# ── Disease info default (seed pertama kali) ──────────────────────────────────
 DEFAULT_DISEASE_INFO = [
     {
         "predicted_class": "Flea_Allergy",
@@ -124,7 +103,7 @@ DEFAULT_DISEASE_INFO = [
 ]
 
 
-# ── Info klinik Sakti Pet Care (statis, dipakai di halaman riwayat) ───────────
+# ── Info klinik Sakti Pet Care (statis) ───────────────────────────────────────
 CLINIC_INFO = {
     "name": "Sakti Pet Care",
     "phone": "0852-1132-2390",
@@ -139,21 +118,20 @@ CLINIC_INFO = {
 
 
 def get_clinic_info() -> dict:
-    """Return info kontak & jam operasional klinik (statis)."""
+    """Return info kontak & jam operasional klinik."""
     return CLINIC_INFO
 
 
-# ── Init Tabel ──────────────────────────────────────────────────────────────────
+# ── Init Tabel & Migrasi Otimatis ─────────────────────────────────────────────
 def init_db():
-    """Buat database & tabel bila belum ada."""
+    """Buat database & tabel bila belum ada + jalankan migrasi kolom otomatis."""
     print("[DB] Memulai init_db()...")
     print(f"[DB] Target koneksi: host={DB_CONFIG['host']} port={DB_CONFIG['port']} db={DB_CONFIG['database']}")
 
     cfg_no_db = {k: v for k, v in DB_CONFIG.items() if k != "database"}
     try:
-        print("[DB] Menghubungkan ke server MySQL (tanpa database) untuk CREATE DATABASE...")
+        print("[DB] Menghubungkan ke server MySQL untuk CREATE DATABASE...")
         conn = _connect_with_retry(cfg_no_db)
-        print("[DB] Koneksi server berhasil. Membuat database jika belum ada...")
         cursor = conn.cursor()
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{DB_CONFIG['database']}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
         conn.commit()
@@ -168,20 +146,13 @@ def init_db():
         print("[DB] Menghubungkan ke database aplikasi...")
         conn = get_db()
         cursor = conn.cursor()
-        print("[DB] Koneksi database aplikasi berhasil.")
 
-        # Batasi waktu tunggu metadata lock — supaya kalau ada koneksi lama
-        # yang masih memegang lock di tabel (misal dari proses sebelumnya
-        # yang tidak tertutup rapi saat container restart/redeploy),
-        # ALTER TABLE tidak hang selamanya tanpa pesan error sama sekali.
-        # Default MySQL bisa menunggu lock dalam waktu yang sangat lama.
         try:
             cursor.execute("SET SESSION lock_wait_timeout = 10")
         except Error as e:
             print(f"[DB] Tidak bisa set lock_wait_timeout: {e}")
 
-        print("[DB] Membuat/memeriksa tabel users...")
-        # ── Tabel users (role ditambah 'dokter') ──────────────────────────
+        # ── 1. Tabel users ──
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id            INT AUTO_INCREMENT PRIMARY KEY,
@@ -195,28 +166,19 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         conn.commit()
-        print("[DB] Tabel users OK. Menjalankan migrasi kolom (jika perlu)...")
 
-        # Migrasi: kalau tabel users sudah ada dari versi lama (role tanpa
-        # 'dokter' atau tanpa kolom is_active), tambahkan secara aman.
-        # Setiap ALTER di-commit sendiri & errornya dicetak (bukan di-pass
-        # diam-diam) supaya kalau memang gagal/timeout, kelihatan di log
-        # alih-alih bikin proses terlihat "stuck tanpa error".
+        # Migrasi Users
         try:
             cursor.execute("ALTER TABLE users MODIFY COLUMN role ENUM('user','admin','dokter','owner') NOT NULL DEFAULT 'user'")
             conn.commit()
-            print("[DB] Migrasi kolom role (+owner) selesai.")
-        except Error as e:
-            print(f"[DB] Migrasi kolom role dilewati ({e}).")
+        except Error: pass
+
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1")
             conn.commit()
-            print("[DB] Migrasi kolom is_active selesai.")
-        except Error as e:
-            print(f"[DB] Migrasi kolom is_active dilewati ({e}).")
+        except Error: pass
 
-        print("[DB] Membuat/memeriksa tabel disease_info...")
-        # ── Tabel disease_info (pengganti hardcode DISEASE_INFO) ──────────
+        # ── 2. Tabel disease_info ──
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS disease_info (
                 id              INT AUTO_INCREMENT PRIMARY KEY,
@@ -232,57 +194,42 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         conn.commit()
-        print("[DB] Tabel disease_info OK.")
 
-        print("[DB] Membuat/memeriksa tabel predictions...")
-        # ── Tabel predictions ──────────────────────────────────────────────
+        # ── 3. Tabel predictions ──
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS predictions (
-                id             INT AUTO_INCREMENT PRIMARY KEY,
-                user_id        INT          NOT NULL,
+                id              INT AUTO_INCREMENT PRIMARY KEY,
+                user_id         INT          NOT NULL,
                 predicted_class VARCHAR(50) NOT NULL,
-                label          VARCHAR(100) NOT NULL,
-                confidence     FLOAT        NOT NULL,
-                description    TEXT         NULL,
-                image_data     LONGBLOB     NULL,
-                created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                label           VARCHAR(100) NOT NULL,
+                confidence      FLOAT        NOT NULL,
+                description     TEXT         NULL,
+                image_data      LONGBLOB     NULL,
+                visit_confirmed TINYINT(1)   NOT NULL DEFAULT 0,
+                visit_confirmed_at DATETIME  NULL,
+                created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         conn.commit()
-        print("[DB] Tabel predictions OK.")
 
-        # Migrasi: kalau tabel predictions sudah ada dari versi sebelum
-        # kolom image_data ditambahkan (foto hasil deteksi disimpan
-        # langsung di DB sebagai BLOB, dipakai oleh endpoint
-        # /predictions/{id}/image), tambahkan secara aman.
+        # Migrasi Predictions
         try:
             cursor.execute("ALTER TABLE predictions ADD COLUMN image_data LONGBLOB NULL")
             conn.commit()
-            print("[DB] Migrasi kolom image_data selesai.")
-        except Error as e:
-            print(f"[DB] Migrasi kolom image_data dilewati ({e}).")
+        except Error: pass
 
-        # Migrasi: tandai apakah saran kunjungan klinik pada satu prediksi
-        # sudah dikonfirmasi oleh dokter (lalu otomatis dicatat di
-        # laporan_kunjungan). Dipakai untuk mengubah badge "Perlu kunjungan"
-        # menjadi "Sudah kunjungan" di halaman riwayat pasien (history.html).
         try:
             cursor.execute("ALTER TABLE predictions ADD COLUMN visit_confirmed TINYINT(1) NOT NULL DEFAULT 0")
             conn.commit()
-            print("[DB] Migrasi kolom visit_confirmed selesai.")
-        except Error as e:
-            print(f"[DB] Migrasi kolom visit_confirmed dilewati ({e}).")
+        except Error: pass
 
         try:
             cursor.execute("ALTER TABLE predictions ADD COLUMN visit_confirmed_at DATETIME NULL")
             conn.commit()
-            print("[DB] Migrasi kolom visit_confirmed_at selesai.")
-        except Error as e:
-            print(f"[DB] Migrasi kolom visit_confirmed_at dilewati ({e}).")
+        except Error: pass
 
-        print("[DB] Membuat/memeriksa tabel activity_logs...")
-        # ── Tabel activity_logs (log aktivitas dasar untuk admin) ─────────
+        # ── 4. Tabel activity_logs ──
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS activity_logs (
                 id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -294,10 +241,8 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         conn.commit()
-        print("[DB] Tabel activity_logs OK.")
 
-        print("[DB] Membuat/memeriksa tabel doctor_notes...")
-        # ── Tabel doctor_notes (catatan dokter ke riwayat prediksi user) ──
+        # ── 5. Tabel doctor_notes ──
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS doctor_notes (
                 id             INT AUTO_INCREMENT PRIMARY KEY,
@@ -312,71 +257,67 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         conn.commit()
-        print("[DB] Tabel doctor_notes OK.")
 
-        # Migrasi: kalau tabel doctor_notes sudah ada dari versi sebelum
-        # kolom need_visit ditambahkan, tambahkan secara aman (sama seperti
-        # pola migrasi kolom is_active di atas).
         try:
             cursor.execute("ALTER TABLE doctor_notes ADD COLUMN need_visit TINYINT(1) NOT NULL DEFAULT 0")
             conn.commit()
-            print("[DB] Migrasi kolom need_visit selesai.")
-        except Error as e:
-            print(f"[DB] Migrasi kolom need_visit dilewati ({e}).")
+        except Error: pass
 
-        print("[DB] Membuat/memeriksa tabel laporan_kunjungan...")
-        # ── Tabel laporan_kunjungan ─────────────────────────────────────────
-        # Dibuat otomatis ketika dokter menekan tombol "Konfirmasi Kunjungan"
-        # pada halaman detail pasien (patient_detail.html), untuk prediksi
-        # yang sebelumnya ditandai need_visit oleh catatan dokter.
+        # ── 6. Tabel laporan_kunjungan (Otomatis dibuat dengan user_id & confirmed_by NULLABLE) ──
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS laporan_kunjungan (
                 id                 INT AUTO_INCREMENT PRIMARY KEY,
                 prediction_id      INT          NOT NULL,
-                patient_id         INT          NOT NULL,
-                confirmed_by       INT          NOT NULL,
+                user_id            INT          NULL,
+                patient_id         INT          NULL,
+                confirmed_by       INT          NULL,
                 catatan_kunjungan  TEXT         NULL,
                 status             ENUM('terjadwal','selesai','batal') NOT NULL DEFAULT 'terjadwal',
                 visit_date         DATETIME     NULL,
                 created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (patient_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (confirmed_by) REFERENCES users(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         conn.commit()
-        print("[DB] Tabel laporan_kunjungan OK.")
 
-        # ── Seed disease_info kalau masih kosong ──────────────────────────
+        # Migrasi Laporan Kunjungan (Menambahkan kolom user_id jika belum ada)
+        try:
+            cursor.execute("ALTER TABLE laporan_kunjungan ADD COLUMN user_id INT NULL AFTER prediction_id")
+            conn.commit()
+            print("[DB] Migrasi kolom user_id pada laporan_kunjungan selesai.")
+        except Error as e:
+            print(f"[DB] Migrasi user_id dilewati/sudah ada ({e}).")
+
+        try:
+            cursor.execute("ALTER TABLE laporan_kunjungan MODIFY COLUMN patient_id INT NULL")
+            cursor.execute("ALTER TABLE laporan_kunjungan MODIFY COLUMN confirmed_by INT NULL")
+            conn.commit()
+        except Error: pass
+
+        # ── Seed data default ──
         cursor.execute("SELECT COUNT(*) FROM disease_info")
-        count = cursor.fetchone()[0]
-        if count == 0:
-            print("[DB] disease_info kosong, melakukan seed data default...")
+        if cursor.fetchone()[0] == 0:
             for d in DEFAULT_DISEASE_INFO:
                 cursor.execute(
-                    """INSERT INTO disease_info
-                       (predicted_class, label, emoji, color, description, advice)
+                    """INSERT INTO disease_info (predicted_class, label, emoji, color, description, advice)
                        VALUES (%s, %s, %s, %s, %s, %s)""",
                     (d["predicted_class"], d["label"], d["emoji"], d["color"], d["description"], d["advice"])
                 )
             conn.commit()
-            print("[DB] disease_info di-seed dengan data default.")
 
         cursor.close()
         conn.close()
-        print("[DB] Tabel berhasil diinisialisasi.")
+        print("[DB] Tabel & migrasi berhasil diinisialisasi.")
     except Error as e:
         print(f"[DB] Gagal membuat tabel: {e}")
 
 
-# ── Helper: ambil semua disease_info sebagai dict (key=predicted_class) ──────
+# ── Helper: Ambil disease_info sebagai dict ──────────────────────────────────
 def get_disease_info_dict() -> dict:
-    """
-    Ambil seluruh disease_info dari database dan kembalikan sebagai dict
-    dengan key predicted_class, supaya kompatibel dengan struktur DISEASE_INFO lama.
-    advice disimpan sebagai TEXT multi-baris, di-split jadi list di sini.
-    """
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -398,19 +339,14 @@ def get_disease_info_dict() -> dict:
         conn.close()
 
 
-# ── Helper: catat log aktivitas ───────────────────────────────────────────────
+# ── Helper: Catat Log Aktivitas ───────────────────────────────────────────────
 def log_activity(user_id, action: str, detail: str = None):
-    """
-    Catat aktivitas dasar user ke tabel activity_logs.
-    action contoh: 'login', 'predict', 'chatbot'
-    Dipanggil secara best-effort — kalau gagal, tidak boleh mengganggu request utama.
-    """
     try:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO activity_logs (user_id, action, detail, created_at) VALUES (%s, %s, %s, %s)",
-            (user_id, action, detail, __import__("datetime").datetime.now())
+            (user_id, action, detail, datetime.now())
         )
         conn.commit()
         cursor.close()
@@ -419,15 +355,14 @@ def log_activity(user_id, action: str, detail: str = None):
         print(f"[DB] Gagal mencatat log aktivitas: {e}")
 
 
-# ── Helper: catatan dokter pada riwayat prediksi ──────────────────────────────
+# ── Helper: Catatan Dokter ───────────────────────────────────────────────────
 def add_doctor_note(prediction_id: int, doctor_id: int, note: str, need_visit: bool = False) -> int:
-    """Simpan catatan dokter untuk satu record prediksi. Return id catatan baru."""
     conn = get_db()
     cursor = conn.cursor()
     try:
         cursor.execute(
             "INSERT INTO doctor_notes (prediction_id, doctor_id, note, need_visit, created_at) VALUES (%s, %s, %s, %s, %s)",
-            (prediction_id, doctor_id, note, 1 if need_visit else 0, __import__("datetime").datetime.now())
+            (prediction_id, doctor_id, note, 1 if need_visit else 0, datetime.now())
         )
         conn.commit()
         return cursor.lastrowid
@@ -437,7 +372,6 @@ def add_doctor_note(prediction_id: int, doctor_id: int, note: str, need_visit: b
 
 
 def delete_doctor_note(note_id: int, doctor_id: int) -> bool:
-    """Hapus catatan dokter. Hanya dokter pemilik catatan yang boleh menghapus."""
     conn = get_db()
     cursor = conn.cursor()
     try:
@@ -452,31 +386,161 @@ def delete_doctor_note(note_id: int, doctor_id: int) -> bool:
         conn.close()
 
 
-# ── Helper: laporan kunjungan (konfirmasi kunjungan klinik) ──────────────────
-def confirm_visit(prediction_id: int, patient_id: int, doctor_id: int, catatan: str = None) -> int:
-    """
-    Menandai kunjungan sebagai 'selesai' secara otomatis saat dikonfirmasi dokter.
-    """
+def get_doctor_notes_for_predictions(prediction_ids: list) -> dict:
+    result = {}
+    if not prediction_ids:
+        return result
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     try:
-        now = __import__("datetime").datetime.now()
+        placeholders = ", ".join(["%s"] * len(prediction_ids))
+        cursor.execute(
+            f"""SELECT dn.id, dn.prediction_id, dn.note, dn.need_visit, dn.created_at, u.name AS doctor_name
+                FROM doctor_notes dn
+                JOIN users u ON dn.doctor_id = u.id
+                WHERE dn.prediction_id IN ({placeholders})
+                ORDER BY dn.created_at DESC""",
+            tuple(prediction_ids)
+        )
+        for row in cursor.fetchall():
+            row["need_visit"] = bool(row["need_visit"])
+            result.setdefault(row["prediction_id"], []).append(row)
+        return result
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ── Helper: Booking & Laporan Kunjungan ────────────────────────────────────────
+
+def get_booked_slots(date_str: str):
+    """Mengambil daftar jam (format HH:MM) yang sedang di-booking pasien lain (status 'terjadwal' atau 'selesai')."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        date_clean = date_str.strip()
+        cursor.execute(
+            """SELECT DATE_FORMAT(visit_date, '%H:%i') AS booked_time 
+               FROM laporan_kunjungan 
+               WHERE DATE(visit_date) = %s 
+                 AND status IN ('terjadwal', 'selesai') 
+                 AND visit_date IS NOT NULL""",
+            (date_clean,)
+        )
+        rows = cursor.fetchall()
+        # Mengembalikan list jam bersih tanpa detik, contoh: ['10:00', '20:00']
+        return [r["booked_time"].strip() for r in rows if r.get("booked_time")]
+    finally:
+        cursor.close()
+        db.close()
+
+
+def save_user_booking(prediction_id: int, user_id: int, visit_datetime: datetime):
+    """Menyimpan atau memperbarui booking kunjungan dari sisi user. 
+    Jika sebelumnya dibatalkan, booking baru akan mereset status konfirmasi dokter (kembali ke null/perlu persetujuan)."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        # Cek apakah sudah ada laporan kunjungan untuk prediksi ini
+        cursor.execute("SELECT id, status FROM laporan_kunjungan WHERE prediction_id = %s", (prediction_id,))
+        existing = cursor.fetchone()
         
-        # 1. Update status prediksi sebagai sudah kunjungan
+        if existing:
+            # Jika sebelumnya dibatalkan atau terjadwal, saat user booking ulang, 
+            # kita set ulang confirmed_by = NULL agar butuh persetujuan dokter kembali dari awal!
+            cursor.execute(
+                """UPDATE laporan_kunjungan 
+                   SET visit_date = %s, status = 'terjadwal', confirmed_by = NULL, user_id = %s, patient_id = %s, catatan_kunjungan = NULL
+                   WHERE prediction_id = %s""",
+                (visit_datetime, user_id, user_id, prediction_id)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO laporan_kunjungan (prediction_id, user_id, patient_id, confirmed_by, status, visit_date, created_at)
+                   VALUES (%s, %s, %s, NULL, 'terjadwal', %s, NOW())""",
+                (prediction_id, user_id, user_id, visit_datetime)
+            )
+        db.commit()
+    finally:
+        cursor.close()
+        db.close()
+
+
+def cancel_user_booking(prediction_id: int, user_id: int):
+    """Membatalkan booking kunjungan milik user dan mereset status konfirmasi di prediksi."""
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        # Ubah status laporan menjadi 'batal' tanpa menghapus confirmed_by jika dokter pernah mengonfirmasi
+        cursor.execute(
+            """UPDATE laporan_kunjungan 
+               SET status = 'batal', catatan_kunjungan = 'Dibatalkan oleh Pasien' 
+               WHERE prediction_id = %s AND (user_id = %s OR patient_id = %s)""",
+            (prediction_id, user_id, user_id)
+        )
+        
+        # Reset tanda visit_confirmed pada tabel predictions ke 0
+        cursor.execute(
+            """UPDATE predictions 
+               SET visit_confirmed = 0, visit_confirmed_at = NULL 
+               WHERE id = %s AND user_id = %s""",
+            (prediction_id, user_id)
+        )
+        db.commit()
+    finally:
+        cursor.close()
+        db.close()
+
+
+def auto_update_expired_visits():
+    """Mengubah status 'terjadwal' menjadi 'selesai' secara otomatis jika waktu booking sudah lewat."""
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            """UPDATE laporan_kunjungan 
+               SET status = 'selesai' 
+               WHERE status = 'terjadwal' AND visit_date IS NOT NULL AND visit_date <= NOW()"""
+        )
+        db.commit()
+    finally:
+        cursor.close()
+        db.close()
+
+
+def confirm_visit(prediction_id: int, patient_id: int, doctor_id: int, catatan: str = None) -> int:
+    """Konfirmasi kunjungan oleh dokter."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        now = datetime.now()
         cursor.execute(
             "UPDATE predictions SET visit_confirmed = 1, visit_confirmed_at = %s WHERE id = %s",
             (now, prediction_id)
         )
         
-        # 2. Masukkan ke laporan_kunjungan dengan status 'selesai' dan visit_date = now
-        cursor.execute(
-            """INSERT INTO laporan_kunjungan
-               (prediction_id, patient_id, confirmed_by, catatan_kunjungan, status, visit_date, created_at)
-               VALUES (%s, %s, %s, %s, 'selesai', %s, %s)""",
-            (prediction_id, patient_id, doctor_id, catatan, now, now)
-        )
-        conn.commit()
-        return cursor.lastrowid
+        cursor.execute("SELECT id, visit_date FROM laporan_kunjungan WHERE prediction_id = %s", (prediction_id,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            v_date = existing["visit_date"] or now
+            cursor.execute(
+                """UPDATE laporan_kunjungan 
+                   SET confirmed_by = %s, catatan_kunjungan = %s, status = 'terjadwal', visit_date = %s
+                   WHERE id = %s""",
+                (doctor_id, catatan, v_date, existing["id"])
+            )
+            conn.commit()
+            return existing["id"]
+        else:
+            cursor.execute(
+                """INSERT INTO laporan_kunjungan
+                   (prediction_id, user_id, patient_id, confirmed_by, catatan_kunjungan, status, visit_date, created_at)
+                   VALUES (%s, %s, %s, %s, %s, 'terjadwal', %s, %s)""",
+                (prediction_id, patient_id, patient_id, doctor_id, catatan, now, now)
+            )
+            conn.commit()
+            return cursor.lastrowid
     finally:
         cursor.close()
         conn.close()
@@ -487,13 +551,16 @@ def get_all_laporan_kunjungan(status: str = None, search: str = None) -> list:
     cursor = conn.cursor(dictionary=True)
     try:
         base = """
-            SELECT lk.*, u.name AS patient_name, u.email AS patient_email,
-                   d.name AS confirmed_by_name,
+            SELECT lk.*, 
+                   COALESCE(u.name, 'Pasien') AS patient_name, 
+                   COALESCE(u.email, '-') AS patient_email,
+                   COALESCE(d.name, 'Dokter') AS confirmed_by_name,
                    p.predicted_class, p.label, p.confidence
             FROM laporan_kunjungan lk
-            JOIN users u ON lk.patient_id = u.id
+            LEFT JOIN users u ON (lk.patient_id = u.id OR lk.user_id = u.id)
             JOIN users d ON lk.confirmed_by = d.id
             JOIN predictions p ON lk.prediction_id = p.id
+            WHERE lk.confirmed_by IS NOT NULL
         """
         conditions = []
         params = []
@@ -506,7 +573,7 @@ def get_all_laporan_kunjungan(status: str = None, search: str = None) -> list:
             params.append(f"%{search}%")
             
         if conditions:
-            base += " WHERE " + " AND ".join(conditions)
+            base += " AND " + " AND ".join(conditions)
         base += " ORDER BY lk.created_at DESC"
         
         cursor.execute(base, tuple(params))
@@ -517,17 +584,18 @@ def get_all_laporan_kunjungan(status: str = None, search: str = None) -> list:
 
 
 def get_laporan_kunjungan_by_id(laporan_id: int) -> dict:
-    """Ambil satu laporan kunjungan beserta detail pasien, dokter, dan prediksi terkait."""
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("""
-            SELECT lk.*, u.name AS patient_name, u.email AS patient_email,
-                   d.name AS confirmed_by_name,
+            SELECT lk.*, 
+                   COALESCE(u.name, 'Pasien') AS patient_name, 
+                   COALESCE(u.email, '-') AS patient_email,
+                   COALESCE(d.name, 'Sistem') AS confirmed_by_name,
                    p.predicted_class, p.label, p.confidence, p.description AS prediction_description
             FROM laporan_kunjungan lk
-            JOIN users u ON lk.patient_id = u.id
-            JOIN users d ON lk.confirmed_by = d.id
+            LEFT JOIN users u ON (lk.patient_id = u.id OR lk.user_id = u.id)
+            LEFT JOIN users d ON lk.confirmed_by = d.id
             JOIN predictions p ON lk.prediction_id = p.id
             WHERE lk.id = %s
         """, (laporan_id,))
@@ -538,7 +606,6 @@ def get_laporan_kunjungan_by_id(laporan_id: int) -> dict:
 
 
 def update_laporan_kunjungan_status(laporan_id: int, status: str, visit_date=None) -> bool:
-    """Ubah status laporan kunjungan ('terjadwal' / 'selesai' / 'batal') dan tanggal kunjungan opsional."""
     conn = get_db()
     cursor = conn.cursor()
     try:
@@ -551,6 +618,7 @@ def update_laporan_kunjungan_status(laporan_id: int, status: str, visit_date=Non
     finally:
         cursor.close()
         conn.close()
+
 
 def get_pending_recommendations(search: str = None) -> list:
     conn = get_db()
@@ -575,36 +643,6 @@ def get_pending_recommendations(search: str = None) -> list:
         
         cursor.execute(sql, tuple(params))
         return cursor.fetchall()
-    finally:
-        cursor.close()
-        conn.close()
-
-
-def get_doctor_notes_for_predictions(prediction_ids: list) -> dict:
-    """
-    Ambil semua catatan dokter untuk sekumpulan prediction_id sekaligus,
-    dikelompokkan per prediction_id (list terurut dari yang terbaru).
-    Return: { prediction_id: [ {id, note, doctor_name, created_at}, ... ] }
-    """
-    result = {}
-    if not prediction_ids:
-        return result
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
-    try:
-        placeholders = ", ".join(["%s"] * len(prediction_ids))
-        cursor.execute(
-            f"""SELECT dn.id, dn.prediction_id, dn.note, dn.need_visit, dn.created_at, u.name AS doctor_name
-                FROM doctor_notes dn
-                JOIN users u ON dn.doctor_id = u.id
-                WHERE dn.prediction_id IN ({placeholders})
-                ORDER BY dn.created_at DESC""",
-            tuple(prediction_ids)
-        )
-        for row in cursor.fetchall():
-            row["need_visit"] = bool(row["need_visit"])
-            result.setdefault(row["prediction_id"], []).append(row)
-        return result
     finally:
         cursor.close()
         conn.close()

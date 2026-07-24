@@ -7,13 +7,14 @@ dan halaman riwayat.
 from datetime import datetime
 
 import numpy as np
-from fastapi import APIRouter, Request, File, UploadFile, HTTPException
+from fastapi import APIRouter, Request, File, Form, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 import math
 
 from database import (
     get_db, get_disease_info_dict, log_activity,
     get_clinic_info, get_doctor_notes_for_predictions,
+    get_booked_slots, save_user_booking, cancel_user_booking, auto_update_expired_visits
 )
 from core.state import templates
 from core.dependencies import get_current_user
@@ -114,6 +115,54 @@ async def get_prediction_image(request: Request, prediction_id: int):
 
     return Response(content=row["image_data"], media_type="image/jpeg")
 
+@router.get("/api/booked-slots")
+async def api_booked_slots(date: str):
+    """API untuk mengembalikan daftar jam yang sudah di-booking pada tanggal tertentu."""
+    if not date:
+        return JSONResponse({"booked_slots": []})
+    slots = get_booked_slots(date)
+    return JSONResponse({"booked_slots": slots})
+
+
+@router.post("/predictions/{prediction_id}/book")
+async def book_visit_appointment(
+    request: Request,
+    prediction_id: int,
+    visit_date: str = Form(...), # Format: YYYY-MM-DD
+    visit_time: str = Form(...)  # Format: HH:MM
+):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    try:
+        dt_str = f"{visit_date.strip()} {visit_time.strip()}"
+        booking_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Format tanggal atau jam tidak valid.")
+
+    # Cek ketersediaan slot jam
+    existing_slots = get_booked_slots(visit_date.strip())
+    if visit_time.strip() in existing_slots:
+        return RedirectResponse("/history?error=Maaf, jam tersebut baru saja di-booking orang lain.", status_code=302)
+
+    save_user_booking(prediction_id, user["id"], booking_dt)
+    log_activity(user["id"], "book_visit", f"Booking kunjungan #{prediction_id} pada {dt_str}")
+
+    return RedirectResponse("/history?msg=Jadwal kunjungan berhasil di-booking!", status_code=302)
+
+
+@router.post("/predictions/{prediction_id}/cancel-booking")
+async def cancel_visit_appointment(request: Request, prediction_id: int):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    cancel_user_booking(prediction_id, user["id"])
+    log_activity(user["id"], "cancel_booking", f"Membatalkan booking #{prediction_id}")
+
+    return RedirectResponse("/history?msg=Booking kunjungan berhasil dibatalkan.", status_code=302)
+
 
 @router.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request, page: int = 1, per_page: int = 10):
@@ -124,12 +173,21 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
     if page < 1:
         page = 1
 
+    # Otomatis update status yang sudah lewat waktu booking ke 'selesai'
+    auto_update_expired_visits()
+
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # Ambil SELURUH data prediksi user ini untuk grafik
+        # PENTING: Tambahkan lk.catatan_kunjungan di query SELECT
         cursor.execute(
-            "SELECT id, predicted_class, label, confidence, description, created_at, visit_confirmed FROM predictions WHERE user_id = %s ORDER BY created_at DESC",
+            """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at, 
+                      p.visit_confirmed, lk.status AS visit_status, lk.visit_date AS booking_datetime,
+                      lk.catatan_kunjungan
+               FROM predictions p
+               LEFT JOIN laporan_kunjungan lk ON lk.prediction_id = p.id
+               WHERE p.user_id = %s 
+               ORDER BY p.created_at DESC""",
             (user["id"],)
         )
         all_raw = cursor.fetchall()
@@ -143,21 +201,20 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
     
     disease_info = get_disease_info_dict()
     
-    # 1. Siapkan ALL RECORDS untuk JS Chart (Full Data)
+    # 1. ALL RECORDS untuk JS Chart
     all_records = []
     for r in all_raw:
         info = disease_info.get(r["predicted_class"], {})
         row = dict(r)
         row["emoji"] = info.get("emoji", "❓")
         row["color"] = info.get("color", "#888")
-        # Format tanggal khusus untuk chart (DD/MM HH:MM)
         if row.get("created_at"):
             row["chart_date"] = row["created_at"].strftime("%d/%m %H:%M")
         else:
             row["chart_date"] = "-"
         all_records.append(row)
         
-    # 2. Siapkan RECORDS untuk Tabel HTML (Pagination Limit 10)
+    # 2. RECORDS untuk Tabel HTML
     paginated_raw = all_raw[offset:offset+per_page]
     records = []
     prediction_ids = [r["id"] for r in paginated_raw]
@@ -168,6 +225,17 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
         row["emoji"] = info.get("emoji", "❓")
         row["color"] = info.get("color", "#888")
         row["advice"] = info.get("advice", [])
+        
+        # Format tanggal & jam booking jika ada
+        if row.get("booking_datetime"):
+            row["booking_date"] = row["booking_datetime"].strftime("%Y-%m-%d")
+            row["booking_time"] = row["booking_datetime"].strftime("%H:%M")
+            row["booking_formatted"] = row["booking_datetime"].strftime("%d %b %Y, %H:%M WIB")
+        else:
+            row["booking_date"] = ""
+            row["booking_time"] = ""
+            row["booking_formatted"] = ""
+
         records.append(row)
 
     notes_map = get_doctor_notes_for_predictions(prediction_ids) if prediction_ids else {}
@@ -179,7 +247,7 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
     return templates.TemplateResponse("history.html", {
         "request": request, "user": user, 
         "records": records, 
-        "all_records": all_records, # Data penuh untuk chart
+        "all_records": all_records,
         "clinic": get_clinic_info(),
         "page": page, "total_pages": total_pages, "total_data": total_data
     })
