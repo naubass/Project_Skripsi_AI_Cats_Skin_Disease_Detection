@@ -6,7 +6,7 @@
   <title>Laporan Kunjungan Klinik — Panel Owner</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
       --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
@@ -51,7 +51,7 @@
     </div>
 
     <!-- Visualisasi Data -->
-    {% if laporan_rows %}
+    {% if all_laporan_rows %}
     <div class="grid md:grid-cols-3 gap-5 mb-6">
       <div class="stat-card md:col-span-3 flex flex-col">
         <p class="text-xs font-bold uppercase mb-3" style="color:var(--text-soft)">📈 Tren Jumlah Laporan</p>
@@ -158,25 +158,82 @@
       </div>
     </div>
 
+    <!-- ── PAGINATION CONTROLS ── -->
+    {% if total_pages > 1 %}
+    {% set query_str = "?q=" ~ (search_query or '') ~ "&date=" ~ (date_filter or '') ~ "&time=" ~ (time_filter or '') %}
+    <div class="flex flex-wrap items-center justify-center gap-2 mt-8">
+      
+      <!-- Tombol Awal -->
+      {% if page > 1 %}
+      <a href="{{ query_str }}&page=1" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Pertama">
+        &laquo;
+      </a>
+      {% else %}
+      <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &laquo;
+      </span>
+      {% endif %}
+
+      <!-- Sebelumnya -->
+      {% if page > 1 %}
+      <a href="{{ query_str }}&page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+        &larr; Prev
+      </a>
+      {% else %}
+      <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &larr; Prev
+      </span>
+      {% endif %}
+
+      <!-- Info Halaman -->
+      <span class="px-4 py-2 text-sm font-bold rounded-xl shadow-sm" style="background:var(--purple-pale); color:var(--purple-mid)">
+        Hal {{ page }} / {{ total_pages }}
+      </span>
+
+      <!-- Selanjutnya -->
+      {% if page < total_pages %}
+      <a href="{{ query_str }}&page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+        Next &rarr;
+      </a>
+      {% else %}
+      <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        Next &rarr;
+      </span>
+      {% endif %}
+
+      <!-- Tombol Akhir -->
+      {% if page < total_pages %}
+      <a href="{{ query_str }}&page={{ total_pages }}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Terakhir">
+        &raquo;
+      </a>
+      {% else %}
+      <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &raquo;
+      </span>
+      {% endif %}
+
+    </div>
+    {% endif %}
+    <!-- BATAS PAGINATION -->
+
   </main>
 </div>
 
 <script>
 function exportExcel() {
     const form = document.getElementById('filter-form');
-    // Ambil data form dan ubah jadi query string
     const params = new URLSearchParams(new FormData(form));
     window.location.href = '/laporan/export?' + params.toString();
 }
 </script>
 
-{% if laporan_rows %}
+{% if all_laporan_rows %}
 <script>
 /* ══════════════════════════════════════════════
-   DATA LAPORAN (dari Jinja2) — dipakai semua chart
+   DATA LAPORAN (dari Jinja2) — Full History
 ══════════════════════════════════════════════ */
 const LAPORAN = [
-  {% for r in laporan_rows %}
+  {% for r in all_laporan_rows %}
   {
     created_at: {{ r.created_at|tojson }},
     patient_name: {{ r.patient_name|tojson }},
@@ -191,9 +248,7 @@ const LAPORAN = [
 Chart.defaults.font.family = "'DM Sans', sans-serif";
 Chart.defaults.color = '#8b7fb8';
 
-/* Ambil bagian tanggal saja dari string created_at, apa pun formatnya
-   ("2026-07-01 10:00" atau "01 Jul 2026, 10:00"), supaya tren bisa
-   dikelompokkan per hari tanpa perlu tahu format pasti dari backend. */
+/* Ambil bagian tanggal saja dari string created_at */
 function extractDatePart(s) {
   if (!s) return '-';
   if (s.includes(',')) return s.split(',')[0].trim();
@@ -335,8 +390,6 @@ new Chart(document.getElementById('chartDokterBar'), {
 });
 
 /* ── 4. Isi 2 stat card di atas berdasarkan LAPORAN ───────────────────── */
-// Kartu "Diagnosis Terbanyak (Selesai)": hitung label prediksi paling
-// sering muncul HANYA di antara laporan berstatus 'selesai'.
 const selesaiCount = {};
 LAPORAN.filter(r => r.status === 'selesai').forEach(r => {
   selesaiCount[r.label] = (selesaiCount[r.label] || 0) + 1;
@@ -346,8 +399,6 @@ document.getElementById('stat-diagnosis-selesai').textContent = selesaiEntries.l
   ? `${selesaiEntries[0][0]} (${selesaiEntries[0][1]}×)`
   : 'Belum ada';
 
-// Kartu "Dokter Rujukan Terbanyak": pakai dokterEntries yang sudah
-// dihitung di atas untuk chart #3, ambil urutan teratas saja.
 document.getElementById('stat-dokter-terbanyak').textContent = dokterEntries.length
   ? `dr. ${dokterEntries[0][0]} (${dokterEntries[0][1]}×)`
   : 'Belum ada';

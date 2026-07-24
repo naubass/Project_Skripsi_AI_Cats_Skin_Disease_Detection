@@ -8,6 +8,7 @@ import io
 import pandas as pd
 from fastapi.responses import StreamingResponse
 from datetime import datetime, timedelta
+import math
 
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -26,57 +27,79 @@ LAPORAN_ROLES = ["owner", "dokter"]
 
 
 @router.get("/laporan", response_class=HTMLResponse)
-async def laporan_list(request: Request):
+async def laporan_list(request: Request, page: int = 1, per_page: int = 10):
     user = require_role(request, LAPORAN_ROLES)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
     search_query = request.query_params.get("q", "").strip()
-    date_filter = request.query_params.get("date", "").strip() # Format YYYY-MM-DD
+    date_filter = request.query_params.get("date", "").strip()
     time_filter = request.query_params.get("time", "all").strip()
 
     raw_rows = get_all_laporan_kunjungan(search=search_query)
 
-    # Filter Waktu
-    laporan_rows = []
+    # Filter Waktu & Tanggal (Full Data)
+    all_filtered_rows = []
     now = datetime.now()
     
     for row in raw_rows:
         row_date = row.get("created_at")
-        # Filter Tanggal (Kalender)
+        
+        # 1. Filter Tanggal (Kalender)
         if date_filter and isinstance(row_date, datetime):
             if row_date.strftime("%Y-%m-%d") != date_filter:
                 continue
-
-        # Filter Waktu
-        if row_date and isinstance(row_date, datetime):
-            if time_filter == "mingguan" and (now - row_date) > timedelta(days=7):
-                continue
-            elif time_filter == "bulanan" and (now - row_date) > timedelta(days=30):
-                continue
-            elif time_filter == "tahunan" and (now - row_date) > timedelta(days=365):
-                continue
         
-        laporan_rows.append(row)
+        # 2. Filter Waktu (Mingguan/Bulanan)
+        if row_date and isinstance(row_date, datetime):
+            if time_filter == "mingguan" and (now - row_date) > timedelta(days=7): continue
+            elif time_filter == "bulanan" and (now - row_date) > timedelta(days=30): continue
+            elif time_filter == "tahunan" and (now - row_date) > timedelta(days=365): continue
+            
+        all_filtered_rows.append(row)
 
-    for row in laporan_rows:
-        if row.get("created_at") and isinstance(row["created_at"], datetime):
-            row["created_at"] = row["created_at"].strftime("%d %b %Y, %H:%M")
-        if row.get("visit_date") and isinstance(row["visit_date"], datetime):
-            row["visit_date"] = row["visit_date"].strftime("%d %b %Y, %H:%M")
+    # Hitung Pagination
+    total_data = len(all_filtered_rows)
+    if page < 1: page = 1
+    total_pages = math.ceil(total_data / per_page) if total_data > 0 else 1
+    offset = (page - 1) * per_page
+
+    # Slice data untuk tabel
+    paginated_rows = all_filtered_rows[offset : offset + per_page]
+
+    # Format data untuk JS Chart (Full History)
+    all_laporan_rows = []
+    for row in all_filtered_rows:
+        r = dict(row) # Copy agar tidak merusak data asli
+        if r.get("created_at") and isinstance(r["created_at"], datetime):
+            r["created_at"] = r["created_at"].strftime("%d %b %Y, %H:%M")
+        all_laporan_rows.append(r)
+
+    # Format data untuk Tabel HTML (Paginated)
+    laporan_rows = []
+    for row in paginated_rows:
+        r = dict(row)
+        if r.get("created_at") and isinstance(r["created_at"], datetime):
+            r["created_at"] = r["created_at"].strftime("%d %b %Y, %H:%M")
+        if r.get("visit_date") and isinstance(r["visit_date"], datetime):
+            r["visit_date"] = r["visit_date"].strftime("%d %b %Y, %H:%M")
+        laporan_rows.append(r)
 
     stats = {
-        "total": len(laporan_rows),
-        "terjadwal": len([r for r in laporan_rows if r["status"] == "terjadwal"]),
-        "selesai": len([r for r in laporan_rows if r["status"] == "selesai"]),
-        "batal": len([r for r in laporan_rows if r["status"] == "batal"]),
+        "total": total_data,
+        "terjadwal": len([r for r in all_filtered_rows if r["status"] == "terjadwal"]),
+        "selesai": len([r for r in all_filtered_rows if r["status"] == "selesai"]),
+        "batal": len([r for r in all_filtered_rows if r["status"] == "batal"]),
     }
 
-    # Mengarah ke folder owner
     return templates.TemplateResponse("owner/laporan.html", {
-        "request": request, "user": user, "laporan_rows": laporan_rows,
-        "stats": stats, "date_filter": date_filter, "time_filter": time_filter, 
-        "search_query": search_query, "active_page": "laporan"
+        "request": request, "user": user, 
+        "laporan_rows": laporan_rows, 
+        "all_laporan_rows": all_laporan_rows, # Data full untuk grafik
+        "stats": stats, 
+        "date_filter": date_filter, "time_filter": time_filter, "search_query": search_query, 
+        "active_page": "laporan",
+        "page": page, "total_pages": total_pages, "total_data": total_data
     })
 
 @router.get("/laporan/export")
@@ -204,7 +227,7 @@ async def laporan_update_status(
 
 
 @router.get("/laporan-rekomendasi", response_class=HTMLResponse)
-async def laporan_rekomendasi_list(request: Request):
+async def laporan_rekomendasi_list(request: Request, page: int = 1, per_page: int = 10):
     user = require_role(request, LAPORAN_ROLES)
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -212,13 +235,14 @@ async def laporan_rekomendasi_list(request: Request):
     # Ambil parameter dari URL
     time_filter = request.query_params.get("time", "all").strip()
     search_query = request.query_params.get("q", "").strip()
-    date_filter = request.query_params.get("date", "").strip() # Ambil tanggal
+    date_filter = request.query_params.get("date", "").strip()
 
     raw_recommendations = get_pending_recommendations(search=search_query)
 
-    rekomendasi_rows = []
+    all_filtered_rows = []
     now = datetime.now()
 
+    # Filter Waktu & Tanggal (Full Data)
     for row in raw_recommendations:
         note_date = row.get("note_date")
         
@@ -236,20 +260,47 @@ async def laporan_rekomendasi_list(request: Request):
             elif time_filter == "tahunan" and (now - note_date) > timedelta(days=365):
                 continue
 
-        rekomendasi_rows.append(row)
+        all_filtered_rows.append(row)
 
-    for row in rekomendasi_rows:
-        if row.get("note_date") and isinstance(row["note_date"], datetime):
-            row["note_date"] = row["note_date"].strftime("%d %b %Y, %H:%M")
+    # Hitung Pagination
+    total_data = len(all_filtered_rows)
+    if page < 1: page = 1
+    total_pages = math.ceil(total_data / per_page) if total_data > 0 else 1
+    offset = (page - 1) * per_page
+
+    # Slice data untuk tabel
+    paginated_rows = all_filtered_rows[offset : offset + per_page]
+
+    # Format data untuk JS Chart (Full History)
+    all_rekomendasi_rows = []
+    for row in all_filtered_rows:
+        r = dict(row)
+        if r.get("note_date") and isinstance(r["note_date"], datetime):
+            r["note_date"] = r["note_date"].strftime("%d %b %Y, %H:%M")
+        all_rekomendasi_rows.append(r)
+
+    # Format data untuk Tabel HTML (Paginated)
+    rekomendasi_rows = []
+    for row in paginated_rows:
+        r = dict(row)
+        if r.get("note_date") and isinstance(r["note_date"], datetime):
+            r["note_date"] = r["note_date"].strftime("%d %b %Y, %H:%M")
+        rekomendasi_rows.append(r)
+
+    # Hitung Pasien Unik (dari seluruh data yang difilter)
+    unique_patients = len(set([r["patient_email"] for r in all_filtered_rows if "patient_email" in r]))
 
     return templates.TemplateResponse("owner/laporan_rekomendasi.html", {
         "request": request, 
         "user": user, 
         "rekomendasi_rows": rekomendasi_rows,
+        "all_rekomendasi_rows": all_rekomendasi_rows, # Data full untuk grafik
         "time_filter": time_filter, 
-        "date_filter": date_filter, # Kirim ke template
+        "date_filter": date_filter, 
         "search_query": search_query,
-        "active_page": "rekomendasi"
+        "active_page": "rekomendasi",
+        "page": page, "total_pages": total_pages, "total_data": total_data,
+        "unique_patients": unique_patients
     })
 
 @router.get("/laporan-rekomendasi/export")
