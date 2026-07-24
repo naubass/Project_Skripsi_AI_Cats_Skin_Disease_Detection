@@ -3,14 +3,19 @@ uvicorn[standard]==0.30.6
 python-multipart==0.0.9
 pillow==10.4.0
 numpy==1.26.4
-tensorflow-cpu==2.19.0
 jinja2==3.1.4
 python-dotenv==1.0.1
-keras==3.13.2
-tf-keras==2.19.0
-langchain==1.2.7
-
-# Auth & Database (BARU)
+pandas
+ 
+# TFLite via tensorflow versi ringan
+tensorflow-cpu==2.19.0
+ 
+# Auth & Database
 mysql-connector-python==8.4.0
 bcrypt==4.2.0
 itsdangerous==2.2.0
+
+# Groq LLM API
+langchain-groq==1.1.1
+langchain-core==1.2.7
+httpx==0.28.1
