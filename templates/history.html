@@ -264,7 +264,7 @@
       <!-- Total -->
       <div class="stat-card">
         <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--text-soft)">Total Analisis</p>
-        <p class="serif text-4xl font-bold" style="color:var(--purple-deep)">{{ records|length }}</p>
+        <p class="serif text-4xl font-bold" style="color:var(--purple-deep)">{{ total_data }}</p>
         <p class="text-xs mt-1" style="color:var(--text-soft)">prediksi dilakukan</p>
       </div>
 
@@ -307,7 +307,7 @@
           <div class="relative w-36 h-36 flex-shrink-0">
             <canvas id="chartDonut"></canvas>
             <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <p class="serif text-2xl font-black" style="color:var(--purple-deep)">{{ records|length }}</p>
+              <p class="serif text-2xl font-black" style="color:var(--purple-deep)">{{ total_data }}</p>
               <p class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--text-soft)">Total</p>
             </div>
           </div>
@@ -334,7 +334,7 @@
           <span class="eyebrow">🏆 Frekuensi</span>
           <p class="serif text-xl font-bold mt-2" style="color:var(--purple-deep)">Kondisi Paling Sering Terdeteksi</p>
         </div>
-        <p class="text-xs" style="color:var(--text-soft)">Berdasarkan {{ records|length }} analisis</p>
+        <p class="text-xs" style="color:var(--text-soft)">Berdasarkan {{ total_data }} analisis</p>
       </div>
       <div style="height:180px">
         <canvas id="chartBar"></canvas>
@@ -416,6 +416,63 @@
         </div>
         {% endfor %}
       </div>
+
+      <!-- KODE PAGINATION KAMU DI SINI -->
+      {% if total_pages > 1 %}
+      <div class="flex flex-wrap items-center justify-center gap-2 mt-8 afu">
+        
+        <!-- Tombol Awal (Halaman 1) -->
+        {% if page > 1 %}
+        <a href="?page=1" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Pertama">
+          &laquo;
+        </a>
+        {% else %}
+        <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+          &laquo;
+        </span>
+        {% endif %}
+
+        <!-- Tombol Sebelumnya -->
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+          &larr; Prev
+        </a>
+        {% else %}
+        <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+          &larr; Prev
+        </span>
+        {% endif %}
+
+        <!-- Info Halaman -->
+        <span class="px-4 py-2 text-sm font-bold rounded-xl shadow-sm" style="background:var(--purple-pale); color:var(--purple-mid)">
+          Hal {{ page }} / {{ total_pages }}
+        </span>
+
+        <!-- Tombol Selanjutnya -->
+        {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+          Next &rarr;
+        </a>
+        {% else %}
+        <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+          Next &rarr;
+        </span>
+        {% endif %}
+
+        <!-- Tombol Akhir (Halaman Terakhir) -->
+        {% if page < total_pages %}
+        <a href="?page={{ total_pages }}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Terakhir">
+          &raquo;
+        </a>
+        {% else %}
+        <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+          &raquo;
+        </span>
+        {% endif %}
+
+      </div>
+      {% endif %}
+      <!-- BATAS PAGINATION -->
     </div>
 
     <!-- Modal Detail Riwayat -->
@@ -660,13 +717,13 @@ const RECORD_DETAILS = {
    DATA DARI JINJA2
 ══════════════════════════════════════════════ */
 const RAW = [
-  {% for r in records %}
+  {% for r in all_records %}
   {
     label:      "{{ r.label }}",
     confidence: {{ r.confidence }},
     color:      "{{ r.color }}",
     emoji:      "{{ r.emoji }}",
-    date:       "{{ r.created_at.strftime('%d/%m %H:%M') if r.created_at else '-' }}"
+    date:       "{{ r.chart_date }}"
   }{% if not loop.last %},{% endif %}
   {% endfor %}
 ];

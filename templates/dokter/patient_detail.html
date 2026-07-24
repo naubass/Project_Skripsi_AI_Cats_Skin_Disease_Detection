@@ -43,7 +43,7 @@
         <p class="text-sm" style="color:var(--text-soft)">{{ patient.email }} · Terdaftar {{ patient.created_at if patient.created_at else '-' }}</p>
       </div>
       <div class="text-right">
-        <p class="serif text-3xl font-bold" style="color:var(--purple-deep)">{{ records|length }}</p>
+        <p class="serif text-3xl font-bold" style="color:var(--purple-deep)">{{ total_data }}</p>
         <p class="text-xs font-bold uppercase" style="color:var(--text-soft)">Total Prediksi</p>
       </div>
     </div>
@@ -65,7 +65,7 @@
     </div>
 
     <!-- Charts row -->
-    {% if records|length > 0 %}
+    {% if total_data > 0 %}
     <div class="grid lg:grid-cols-2 gap-6 mb-6">
 
       <!-- Donut distribusi pasien ini -->
@@ -76,7 +76,7 @@
           <div style="position:relative;width:140px;height:140px;flex-shrink:0">
             <canvas id="patientDonut" width="140" height="140"></canvas>
             <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
-              <p class="serif font-bold text-xl" style="color:var(--purple-deep);line-height:1">{{ records|length }}</p>
+              <p class="serif font-bold text-xl" style="color:var(--purple-deep);line-height:1">{{ total_data }}</p>
               <p style="font-size:9px;color:var(--text-soft);font-weight:700;text-transform:uppercase">Sesi</p>
             </div>
           </div>
@@ -96,7 +96,7 @@
     <div class="stat-card mb-6">
       <div class="section-badge">📈 Frekuensi</div>
       <h3 class="font-bold text-base mb-1" style="color:var(--purple-deep)">Kondisi Paling Sering Terdeteksi</h3>
-      <p class="text-xs mb-5" style="color:var(--text-soft)">Berdasarkan {{ records|length }} analisis</p>
+      <p class="text-xs mb-5" style="color:var(--text-soft)">Berdasarkan {{ total_data }} analisis</p>
       <div style="position:relative; height:220px;">
         <canvas id="patientBar"></canvas>
       </div>
@@ -234,6 +234,65 @@
         <p class="text-sm" style="color:var(--text-soft)">User ini belum memiliki riwayat prediksi.</p>
         {% endfor %}
       </div>
+
+      <!-- PAGINATION CONTROLS -->
+      {% if total_pages > 1 %}
+      <div class="flex flex-col sm:flex-row items-center justify-between mt-8 pt-6 border-t gap-4" style="border-color:rgba(212,168,67,0.15)">
+        <p class="text-xs font-semibold" style="color:var(--text-soft)">
+          Menampilkan halaman <strong style="color:var(--purple-deep)">{{ page }}</strong> dari <strong>{{ total_pages }}</strong> (Total: {{ total_data }} analisis)
+        </p>
+        
+        <div class="flex flex-wrap justify-center gap-2">
+          
+          <!-- Tombol Awal -->
+          {% if page > 1 %}
+          <a href="?page=1" class="px-3 py-2 rounded-xl text-xs font-bold transition-all border bg-white hover:bg-purple-50" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Pertama">
+            &laquo;
+          </a>
+          {% else %}
+          <button disabled class="px-3 py-2 rounded-xl text-xs font-bold border bg-gray-50 opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+            &laquo;
+          </button>
+          {% endif %}
+
+          <!-- Sebelumnya -->
+          {% if page > 1 %}
+          <a href="?page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-xs font-bold transition-all border bg-white hover:bg-purple-50" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+             &larr; Prev
+          </a>
+          {% else %}
+          <button disabled class="px-4 py-2 rounded-xl text-xs font-bold border bg-gray-50 opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+             &larr; Prev
+          </button>
+          {% endif %}
+
+          <!-- Selanjutnya -->
+          {% if page < total_pages %}
+          <a href="?page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-white shadow-md hover:opacity-90" style="background:var(--purple-mid)">
+             Next &rarr;
+          </a>
+          {% else %}
+          <button disabled class="px-4 py-2 rounded-xl text-xs font-bold text-white opacity-50 cursor-not-allowed" style="background:var(--purple-mid)">
+             Next &rarr;
+          </button>
+          {% endif %}
+
+          <!-- Tombol Akhir -->
+          {% if page < total_pages %}
+          <a href="?page={{ total_pages }}" class="px-3 py-2 rounded-xl text-xs font-bold transition-all text-white shadow-md hover:opacity-90" style="background:var(--purple-mid)" title="Halaman Terakhir">
+            &raquo;
+          </a>
+          {% else %}
+          <button disabled class="px-3 py-2 rounded-xl text-xs font-bold text-white opacity-50 cursor-not-allowed" style="background:var(--purple-mid)">
+            &raquo;
+          </button>
+          {% endif %}
+
+        </div>
+      </div>
+      {% endif %}
+      <!-- BATAS PAGINATION -->
+
     </div>
 
     <!-- Modal preview gambar -->
@@ -263,14 +322,10 @@
   Chart.defaults.font.family = "'DM Sans', sans-serif";
   Chart.defaults.color = '#8b7fb8';
 
-  // Data dari Jinja2
-  const records = {{ records | tojson }};
+  // JS MEMBACA DATA FULL HISTORY (Semua Halaman) untuk keperluan grafik
+  const records = {{ all_records | tojson }};
   if (records.length === 0) { document.getElementById('kpi-row').style.display = 'none'; }
 
-  // ── Modal preview gambar ─────────────────────────────────────────────────
-  // Sebelumnya fungsi ini dipanggil di HTML (onclick) tapi belum didefinisikan,
-  // sehingga klik "Lihat foto" tidak melakukan apa-apa (error di console:
-  // "openImageModal is not defined"). Ditambahkan di sini.
   function openImageModal(imageUrl, label, confidence, color) {
     const modal      = document.getElementById('img-modal');
     const modalImg    = document.getElementById('modal-img');
@@ -286,7 +341,7 @@
     }
 
     modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden'; // cegah scroll background saat modal terbuka
+    document.body.style.overflow = 'hidden'; 
   }
 
   function closeImageModal() {
@@ -295,7 +350,6 @@
     document.body.style.overflow = '';
   }
 
-  // ── Toggle form tambah catatan dokter ───────────────────────────────────
   function toggleNoteForm(recordId) {
     const form = document.getElementById('note-form-' + recordId);
     if (!form) return;
@@ -305,7 +359,6 @@
     }
   }
 
-  // ── Toggle form konfirmasi kunjungan ────────────────────────────────────
   function toggleVisitForm(recordId) {
     const form = document.getElementById('visit-form-' + recordId);
     if (!form) return;
@@ -315,24 +368,20 @@
     }
   }
 
-  // Tutup modal dengan tombol Escape
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeImageModal();
   });
 
   // ── KPI ──────────────────────────────────────────────────────────────────
   if (records.length > 0) {
-    // most frequent label
     const freq = {};
     records.forEach(r => { freq[r.label] = (freq[r.label] || 0) + 1; });
     const mostLabel = Object.entries(freq).sort((a,b) => b[1]-a[1])[0];
     document.getElementById('kpi-most').textContent = mostLabel[0] + ' (' + mostLabel[1] + '×)';
 
-    // avg confidence
     const avg = (records.reduce((s,r) => s + r.confidence, 0) / records.length).toFixed(1);
     document.getElementById('kpi-avg').textContent = avg + '%';
 
-    // latest date — records already sorted desc by backend
     const last = records[0];
     document.getElementById('kpi-last').textContent = last.created_at
       ? last.created_at.substring(0, 10) : '—';
@@ -363,7 +412,6 @@
       }
     });
 
-    // Legend manual
     const legendEl = document.getElementById('donut-legend');
     entries.forEach(([label, v]) => {
       const pct = ((v.count / records.length) * 100).toFixed(0);
@@ -377,8 +425,6 @@
         </div>`;
     });
 
-    // ── Bar Chart: frekuensi per kondisi (pasien ini) ───────────────────────
-    // Pakai freq2 yang sama dengan donut, supaya angka & warna selalu konsisten.
     const bLabels = entries.map(([l, v]) => v.emoji + ' ' + l);
     const bCounts = entries.map(([_, v]) => v.count);
     const bColors = entries.map(([_, v]) => v.color);
@@ -410,8 +456,6 @@
       }
     });
 
-    // ── Line chart ──────────────────────────────────────────────────────────
-    // records sorted desc → reverse for chronological
     const sorted = [...records].reverse();
     const lineLabels = sorted.map((r, i) => '#' + (i + 1));
     const lineData   = sorted.map(r => r.confidence);

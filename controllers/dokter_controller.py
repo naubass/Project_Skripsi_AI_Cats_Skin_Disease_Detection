@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
+import math
 
 from database import (
     get_db, get_disease_info_dict, log_activity,
@@ -91,16 +92,35 @@ async def dokter_dashboard(request: Request):
 
 
 @router.get("/dokter/patients", response_class=HTMLResponse)
-async def dokter_patients_page(request: Request):
+async def dokter_patients_page(request: Request, page: int = 1, per_page: int = 20):
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
 
     query = request.query_params.get("q", "").strip()
+    
+    if page < 1:
+        page = 1
 
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
+        # Hitung Total Data untuk Pagination
+        if query:
+            cursor.execute("""
+                SELECT COUNT(id) AS total FROM users 
+                WHERE role = 'user' AND (name LIKE %s OR email LIKE %s)
+            """, (f"%{query}%", f"%{query}%"))
+        else:
+            cursor.execute("SELECT COUNT(id) AS total FROM users WHERE role = 'user'")
+            
+        total_data = cursor.fetchone()["total"]
+        total_pages = math.ceil(total_data / per_page) if total_data > 0 else 1
+        
+        # Hitung Offset
+        offset = (page - 1) * per_page
+
+        # Ambil Data Sesuai Halaman (LIMIT & OFFSET)
         if query:
             cursor.execute("""
                 SELECT u.id, u.name, u.email, COUNT(p.id) AS total_predictions
@@ -109,7 +129,8 @@ async def dokter_patients_page(request: Request):
                 WHERE u.role = 'user' AND (u.name LIKE %s OR u.email LIKE %s)
                 GROUP BY u.id
                 ORDER BY total_predictions DESC
-            """, (f"%{query}%", f"%{query}%"))
+                LIMIT %s OFFSET %s
+            """, (f"%{query}%", f"%{query}%", per_page, offset))
         else:
             cursor.execute("""
                 SELECT u.id, u.name, u.email, COUNT(p.id) AS total_predictions
@@ -118,7 +139,9 @@ async def dokter_patients_page(request: Request):
                 WHERE u.role = 'user'
                 GROUP BY u.id
                 ORDER BY total_predictions DESC
-            """)
+                LIMIT %s OFFSET %s
+            """, (per_page, offset))
+            
         patients = cursor.fetchall()
     finally:
         cursor.close()
@@ -126,12 +149,13 @@ async def dokter_patients_page(request: Request):
 
     return templates.TemplateResponse("dokter/patients.html", {
         "request": request, "user": user, "patients": patients,
-        "active_page": "patients", "query": query
+        "active_page": "patients", "query": query,
+        "page": page, "total_pages": total_pages, "total_data": total_data
     })
 
 
 @router.get("/dokter/patients/{patient_id}", response_class=HTMLResponse)
-async def dokter_patient_detail(request: Request, patient_id: int):
+async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1, per_page: int = 10):
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -144,36 +168,67 @@ async def dokter_patient_detail(request: Request, patient_id: int):
         cursor.execute("SELECT id, name, email, created_at FROM users WHERE id = %s AND role = 'user'", (patient_id,))
         patient = cursor.fetchone()
         if not patient:
-            cursor.close()
-            db.close()
             raise HTTPException(status_code=404, detail="Pasien tidak ditemukan.")
 
         if patient.get("created_at"):
             patient["created_at"] = patient["created_at"].strftime("%d %b %Y")
 
+        # Ambil SELURUH data untuk grafik visual (charts)
         cursor.execute(
             """SELECT id, predicted_class, label, confidence, description, created_at,
                       visit_confirmed, visit_confirmed_at
                FROM predictions WHERE user_id = %s ORDER BY created_at DESC""",
             (patient_id,)
         )
-        records = cursor.fetchall()
-        prediction_ids = [r["id"] for r in records]
-        for r in records:
-            info = disease_info.get(r["predicted_class"], {})
-            r["emoji"] = info.get("emoji", "❓")
-            r["color"] = info.get("color", "#888")
-            r["advice"] = info.get("advice", [])
-            r["visit_confirmed"] = bool(r.get("visit_confirmed"))
-            if r.get("visit_confirmed_at"):
-                r["visit_confirmed_at"] = r["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
-            if r.get("created_at"):
-                r["created_at"] = r["created_at"].strftime("%Y-%m-%d %H:%M")
+        all_raw = cursor.fetchall()
     finally:
         cursor.close()
         db.close()
 
-    notes_map = get_doctor_notes_for_predictions(prediction_ids)
+    # Hitung total data & halaman
+    total_data = len(all_raw)
+    total_pages = math.ceil(total_data / per_page) if total_data > 0 else 1
+    if page < 1: page = 1
+
+    offset = (page - 1) * per_page
+    
+    # Format data untuk JS Chart (Full History)
+    all_records = []
+    for r in all_raw:
+        info = disease_info.get(r["predicted_class"], {})
+        row = dict(r)
+        row["emoji"] = info.get("emoji", "❓")
+        row["color"] = info.get("color", "#888")
+        row["visit_confirmed"] = bool(row.get("visit_confirmed"))
+        
+        # Konversi objek datetime menjadi string agar bisa dibaca oleh JSON/JS
+        if row.get("created_at"):
+            row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
+        if row.get("visit_confirmed_at"):
+            row["visit_confirmed_at"] = row["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
+            
+        all_records.append(row)
+
+    # Slice data untuk tabel/log riwayat (Pagination per 10 data)
+    paginated_raw = all_raw[offset:offset+per_page]
+    records = []
+    prediction_ids = [r["id"] for r in paginated_raw]
+    
+    for r in paginated_raw:
+        info = disease_info.get(r["predicted_class"], {})
+        row = dict(r)
+        row["emoji"] = info.get("emoji", "❓")
+        row["color"] = info.get("color", "#888")
+        row["advice"] = info.get("advice", [])
+        row["visit_confirmed"] = bool(row.get("visit_confirmed"))
+        if row.get("visit_confirmed_at"):
+            row["visit_confirmed_at"] = row["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
+        if row.get("created_at"):
+            row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
+        records.append(row)
+
+    # Hanya ambil catatan dokter untuk 10 data yang tampil di layar
+    notes_map = get_doctor_notes_for_predictions(prediction_ids) if prediction_ids else {}
     for r in records:
         notes = notes_map.get(r["id"], [])
         for n in notes:
@@ -183,7 +238,9 @@ async def dokter_patient_detail(request: Request, patient_id: int):
 
     return templates.TemplateResponse("dokter/patient_detail.html", {
         "request": request, "user": user, "patient": patient,
-        "records": records, "active_page": "patients"
+        "records": records, "all_records": all_records, 
+        "active_page": "patients",
+        "page": page, "total_pages": total_pages, "total_data": total_data
     })
 
 

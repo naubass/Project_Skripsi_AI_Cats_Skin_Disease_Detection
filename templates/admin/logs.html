@@ -19,7 +19,12 @@
     .sidebar-link.active { background:var(--purple-mid); color:#fff; }
     .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
     .action-badge { font-size:10px; font-weight:800; padding:3px 10px; border-radius:99px; text-transform:uppercase; }
-    select { border:1.5px solid var(--purple-pale); border-radius:10px; padding:8px 12px; font-size:13px; outline:none; }
+    select, input[type="date"] { border:1.5px solid var(--purple-pale); border-radius:10px; padding:8px 12px; font-size:13px; outline:none; transition: border-color .2s; }
+    select:focus, input[type="date"]:focus { border-color:var(--purple-mid); }
+    
+    /* Animasi */
+    @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    .afu { animation: fadeUp 0.4s ease-out forwards; }
   </style>
 </head>
 <body>
@@ -27,51 +32,162 @@
 <div class="flex flex-col md:flex-row min-h-screen">
   {% include "admin/_sidebar.html" %}
 
-  <main class="flex-1 p-8">
-    <div class="flex items-center justify-between mb-8">
-      <div>
-        <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Admin Panel</span>
-        <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Log Aktivitas</h1>
-      </div>
-      <form method="GET" action="/admin/logs">
-        <select name="action" onchange="this.form.submit()">
-          <option value="">Semua Aktivitas</option>
-          <option value="login" {% if filter_action == 'login' %}selected{% endif %}>Login</option>
-          <option value="predict" {% if filter_action == 'predict' %}selected{% endif %}>Prediksi</option>
-          <option value="chatbot" {% if filter_action == 'chatbot' %}selected{% endif %}>Chatbot</option>
-        </select>
-      </form>
+  <main class="flex-1 p-5 md:p-8 min-w-0 overflow-y-auto">
+    <div class="mb-8 afu">
+      <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Admin Panel</span>
+      <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Log Aktivitas</h1>
     </div>
 
-    <div class="stat-card overflow-x-auto">
-      <table class="w-full text-sm">
+    <!-- Filter Multi (Action, Kalender, Waktu) & Info Total -->
+    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6 afu" style="animation-delay: 0.1s">
+      
+      <!-- Toolbar Filter Terpadu -->
+      <form method="GET" action="/admin/logs" class="flex flex-wrap items-center gap-3 p-2.5 bg-white border rounded-2xl shadow-sm w-full xl:w-auto" style="border-color:rgba(212,168,67,0.15)">
+        
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <span class="text-[10px] font-bold uppercase tracking-widest hidden md:block px-2" style="color:var(--text-soft)">Filter</span>
+          
+          <!-- Filter Action -->
+          <select name="action" class="flex-1 sm:flex-none text-sm font-semibold bg-gray-50 border-transparent rounded-xl px-3 py-2 cursor-pointer focus:ring-2 focus:ring-purple-300" style="color:var(--purple-deep); outline:none;">
+            <option value="">Semua Aksi</option>
+            <option value="login" {% if filter_action == 'login' %}selected{% endif %}>🔑 Login</option>
+            <option value="predict" {% if filter_action == 'predict' %}selected{% endif %}>🔬 Prediksi</option>
+            <option value="chatbot" {% if filter_action == 'chatbot' %}selected{% endif %}>🤖 Chatbot</option>
+            <option value="confirm_visit" {% if filter_action == 'confirm_visit' %}selected{% endif %}>🏥 Konfirmasi</option>
+          </select>
+
+          <!-- Kalender Filter -->
+          <input type="date" name="date" value="{{ date_filter or '' }}" class="flex-1 sm:flex-none text-sm font-semibold bg-gray-50 border-transparent rounded-xl px-3 py-2 cursor-pointer focus:ring-2 focus:ring-purple-300" style="color:var(--purple-deep); outline:none;">
+
+          <!-- Filter Rentang Waktu -->
+          <select name="time" class="flex-1 sm:flex-none text-sm font-semibold bg-gray-50 border-transparent rounded-xl px-3 py-2 cursor-pointer focus:ring-2 focus:ring-purple-300" style="color:var(--purple-deep); outline:none;">
+            <option value="all" {% if time_filter == 'all' %}selected{% endif %}>⏳ Semua Waktu</option>
+            <option value="mingguan" {% if time_filter == 'mingguan' %}selected{% endif %}>7 Hari Terakhir</option>
+            <option value="bulanan" {% if time_filter == 'bulanan' %}selected{% endif %}>30 Hari Terakhir</option>
+            <option value="tahunan" {% if time_filter == 'tahunan' %}selected{% endif %}>1 Tahun Terakhir</option>
+          </select>
+        </div>
+
+        <!-- Pemisah Garis Vertikal (Desktop) -->
+        <div class="hidden sm:block w-px h-6 bg-gray-200 mx-1"></div>
+
+        <div class="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+          <!-- Tombol Terapkan -->
+          <button type="submit" class="flex-1 sm:flex-none px-5 py-2 text-sm font-bold text-white rounded-xl transition-transform hover:scale-[1.02]" style="background:var(--purple-mid)">
+            Terapkan
+          </button>
+
+          <!-- Tombol Refresh / Reset -->
+          <a href="/admin/logs" class="px-3 py-2 rounded-xl bg-gray-50 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center justify-center flex-shrink-0" style="color:var(--text-soft)" title="Reset Filter">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+          </a>
+        </div>
+      </form>
+      
+      <!-- Info Total -->
+      <div class="flex items-center bg-white px-5 py-3 border rounded-2xl shadow-sm whitespace-nowrap w-full xl:w-auto justify-center" style="border-color:rgba(212,168,67,0.15)">
+        <span class="text-[11px] font-bold uppercase tracking-wider mr-2" style="color:var(--text-soft)">Total Log</span>
+        <span class="text-xl font-black" style="color:var(--purple-deep)">{{ total_data }}</span>
+      </div>
+    </div>
+
+    <!-- Tabel Log Aktivitas -->
+    <div class="stat-card overflow-x-auto afu" style="animation-delay: 0.2s; padding: 0;">
+      <table class="w-full text-sm text-left">
         <thead>
-          <tr class="text-left border-b" style="border-color:var(--purple-pale)">
-            <th class="py-3 font-bold" style="color:var(--text-soft)">User</th>
-            <th class="py-3 font-bold" style="color:var(--text-soft)">Aksi</th>
-            <th class="py-3 font-bold" style="color:var(--text-soft)">Detail</th>
-            <th class="py-3 font-bold text-right" style="color:var(--text-soft)">Waktu</th>
+          <tr class="border-b bg-gray-50/50" style="border-color:var(--purple-pale)">
+            <th class="p-4 font-bold" style="color:var(--text-soft)">User</th>
+            <th class="p-4 font-bold" style="color:var(--text-soft)">Aksi</th>
+            <th class="p-4 font-bold" style="color:var(--text-soft)">Detail</th>
+            <th class="p-4 font-bold text-right" style="color:var(--text-soft)">Waktu</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="divide-y" style="border-color:var(--purple-pale)">
           {% for log in logs %}
-          <tr class="border-b" style="border-color:var(--purple-pale)">
-            <td class="py-3 font-semibold" style="color:var(--text-mid)">{{ log.name or 'Unknown' }}</td>
-            <td class="py-3">
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="p-4 font-semibold" style="color:var(--text-mid)">{{ log.name or 'Unknown' }}</td>
+            <td class="p-4">
               <span class="action-badge"
                 style="background:{% if log.action=='login' %}#dbeafe;color:#1d4ed8{% elif log.action=='predict' %}#fef3c7;color:#92400e{% else %}#ede8f8;color:#4c2fa0{% endif %}">
                 {{ log.action }}
               </span>
             </td>
-            <td class="py-3 text-xs" style="color:var(--text-soft)">{{ log.detail or '-' }}</td>
-            <td class="py-3 text-xs text-right" style="color:var(--text-soft)">{{ log.created_at.strftime('%d %b %Y, %H:%M') if log.created_at else '-' }}</td>
+            <td class="p-4 text-xs" style="color:var(--text-soft)">{{ log.detail or '-' }}</td>
+            <td class="p-4 text-xs text-right whitespace-nowrap" style="color:var(--text-soft)">{{ log.created_at.strftime('%d %b %Y, %H:%M') if log.created_at else '-' }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="4" class="py-8 text-center text-sm" style="color:var(--text-soft)">Belum ada log aktivitas.</td></tr>
+          <tr>
+            <td colspan="4" class="p-8 text-center text-sm" style="color:var(--text-soft)">
+              Belum ada log aktivitas yang sesuai dengan filter.
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    <!-- ── PAGINATION CONTROLS ── -->
+    {% if total_pages > 1 %}
+    <!-- Set URL Parameter Base -->
+    {% set query_str = "?action=" ~ (filter_action or '') ~ "&date=" ~ (date_filter or '') ~ "&time=" ~ (time_filter or '') %}
+
+    <div class="flex flex-wrap items-center justify-center gap-2 mt-8 afu" style="animation-delay: 0.3s">
+      
+      <!-- Tombol Awal -->
+      {% if page > 1 %}
+      <a href="{{ query_str }}&page=1" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Pertama">
+        &laquo;
+      </a>
+      {% else %}
+      <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &laquo;
+      </span>
+      {% endif %}
+
+      <!-- Sebelumnya -->
+      {% if page > 1 %}
+      <a href="{{ query_str }}&page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+        &larr; Prev
+      </a>
+      {% else %}
+      <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &larr; Prev
+      </span>
+      {% endif %}
+
+      <!-- Info Halaman -->
+      <span class="px-4 py-2 text-sm font-bold rounded-xl shadow-sm" style="background:var(--purple-pale); color:var(--purple-mid)">
+        Hal {{ page }} / {{ total_pages }}
+      </span>
+
+      <!-- Selanjutnya -->
+      {% if page < total_pages %}
+      <a href="{{ query_str }}&page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+        Next &rarr;
+      </a>
+      {% else %}
+      <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        Next &rarr;
+      </span>
+      {% endif %}
+
+      <!-- Tombol Akhir -->
+      {% if page < total_pages %}
+      <a href="{{ query_str }}&page={{ total_pages }}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Terakhir">
+        &raquo;
+      </a>
+      {% else %}
+      <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &raquo;
+      </span>
+      {% endif %}
+
+    </div>
+    {% endif %}
+    <!-- BATAS PAGINATION -->
+
   </main>
 </div>
 

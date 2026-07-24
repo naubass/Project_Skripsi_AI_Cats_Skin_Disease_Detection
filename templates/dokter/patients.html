@@ -19,8 +19,13 @@
     .sidebar-link.active { background:var(--purple-mid); color:#fff; }
     .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
     .patient-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:16px; padding:18px; transition:all .2s; cursor:pointer; }
-    .patient-card:hover { border-color:var(--gold); transform:translateY(-2px); }
-    input[type="search"] { border:1.5px solid var(--purple-pale); border-radius:10px; padding:9px 14px; font-size:14px; outline:none; width:100%; }
+    .patient-card:hover { border-color:var(--gold); transform:translateY(-2px); box-shadow:0 10px 20px rgba(45,27,105,0.05); }
+    input[type="search"] { border:1.5px solid var(--purple-pale); border-radius:10px; padding:9px 14px; font-size:14px; outline:none; width:100%; transition: border-color .2s; }
+    input[type="search"]:focus { border-color: var(--purple-mid); }
+    
+    /* Animasi sederhana */
+    @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    .afu { animation: fadeUp 0.4s ease-out forwards; }
   </style>
 </head>
 <body>
@@ -29,17 +34,17 @@
   {% include "dokter/_sidebar.html" %}
 
   <main class="flex-1 p-5 md:p-8 min-w-0 overflow-y-auto">
-    <div class="mb-6">
+    <div class="mb-6 afu">
       <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--gold)">Panel Dokter</span>
       <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Riwayat Pasien</h1>
-      <p class="text-sm mt-1" style="color:var(--text-soft)">{{ patients|length }} user terdaftar dengan riwayat prediksi</p>
+      <p class="text-sm mt-1" style="color:var(--text-soft)">{{ total_data }} user terdaftar dalam sistem</p>
     </div>
 
-    <form method="GET" action="/dokter/patients" class="mb-6">
+    <form method="GET" action="/dokter/patients" class="mb-6 afu">
       <input type="search" name="q" value="{{ query or '' }}" placeholder="Cari nama atau email user...">
     </form>
 
-    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5 afu" style="animation-delay: 0.1s">
       {% for p in patients %}
       <a href="/dokter/patients/{{ p.id }}" class="patient-card block">
         <div class="flex items-center gap-3 mb-3">
@@ -57,9 +62,66 @@
         </div>
       </a>
       {% else %}
-      <p class="text-sm col-span-3" style="color:var(--text-soft)">Tidak ada user yang cocok.</p>
+      <p class="text-sm col-span-3 text-center py-8" style="color:var(--text-soft)">Tidak ada data pasien yang ditemukan.</p>
       {% endfor %}
     </div>
+
+    <!-- ── PAGINATION CONTROLS ── -->
+    {% if total_pages > 1 %}
+    <div class="flex flex-wrap items-center justify-center gap-2 mt-10 afu" style="animation-delay: 0.2s">
+      
+      <!-- Tombol Awal -->
+      {% if page > 1 %}
+      <a href="?page=1{% if query %}&q={{ query }}{% endif %}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Pertama">
+        &laquo;
+      </a>
+      {% else %}
+      <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &laquo;
+      </span>
+      {% endif %}
+
+      <!-- Sebelumnya -->
+      {% if page > 1 %}
+      <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+        &larr; Prev
+      </a>
+      {% else %}
+      <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &larr; Prev
+      </span>
+      {% endif %}
+
+      <!-- Info Halaman -->
+      <span class="px-4 py-2 text-sm font-bold rounded-xl shadow-sm" style="background:var(--purple-pale); color:var(--purple-mid)">
+        Hal {{ page }} / {{ total_pages }}
+      </span>
+
+      <!-- Selanjutnya -->
+      {% if page < total_pages %}
+      <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">
+        Next &rarr;
+      </a>
+      {% else %}
+      <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        Next &rarr;
+      </span>
+      {% endif %}
+
+      <!-- Tombol Akhir -->
+      {% if page < total_pages %}
+      <a href="?page={{ total_pages }}{% if query %}&q={{ query }}{% endif %}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)" title="Halaman Terakhir">
+        &raquo;
+      </a>
+      {% else %}
+      <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">
+        &raquo;
+      </span>
+      {% endif %}
+
+    </div>
+    {% endif %}
+
   </main>
 </div>
 

@@ -3,6 +3,7 @@ controllers/admin_controller.py — Route panel admin: dashboard, kelola
 user, log aktivitas, dan upload PDF knowledge base chatbot.
 """
 
+import math
 from pathlib import Path
 
 from fastapi import APIRouter, Request, Form, File, UploadFile, HTTPException
@@ -62,15 +63,49 @@ async def admin_dashboard(request: Request):
 
 
 @router.get("/admin/users", response_class=HTMLResponse)
-async def admin_users_page(request: Request):
+async def admin_users_page(request: Request, page: int = 1, per_page: int = 10, q: str = ""):
     user = require_role(request, ["admin"])
     if not user:
         return RedirectResponse("/login", status_code=302)
 
+    query = q.strip()
+    if page < 1:
+        page = 1
+
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC")
+        # Hitung Total Data untuk Pagination
+        if query:
+            cursor.execute(
+                "SELECT COUNT(id) AS total FROM users WHERE name LIKE %s OR email LIKE %s",
+                (f"%{query}%", f"%{query}%")
+            )
+        else:
+            cursor.execute("SELECT COUNT(id) AS total FROM users")
+            
+        total_data = cursor.fetchone()["total"]
+        total_pages = math.ceil(total_data / per_page) if total_data > 0 else 1
+        
+        offset = (page - 1) * per_page
+
+        # Ambil Data Sesuai Halaman (LIMIT & OFFSET)
+        if query:
+            cursor.execute(
+                """
+                SELECT id, name, email, role, is_active, created_at 
+                FROM users 
+                WHERE name LIKE %s OR email LIKE %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (f"%{query}%", f"%{query}%", per_page, offset)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (per_page, offset)
+            )
         users = cursor.fetchall()
     finally:
         cursor.close()
@@ -86,7 +121,8 @@ async def admin_users_page(request: Request):
     error = request.query_params.get("error")
     return templates.TemplateResponse("admin/users.html", {
         "request": request, "user": user, "users": users,
-        "active_page": "users", "msg": msg, "error": error
+        "active_page": "users", "msg": msg, "error": error,
+        "query": query, "page": page, "total_pages": total_pages, "total_data": total_data
     })
 
 
@@ -195,41 +231,75 @@ async def admin_delete_user(request: Request, user_id: int):
 
 
 @router.get("/admin/logs", response_class=HTMLResponse)
-async def admin_logs_page(request: Request):
+async def admin_logs_page(
+    request: Request,
+    page: int = 1,
+    per_page: int = 20,
+    action: str = "",
+    time: str = "all",
+    date: str = ""
+):
     user = require_role(request, ["admin"])
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    filter_action = request.query_params.get("action", "")
-
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        if filter_action:
-            cursor.execute("""
-                SELECT al.action, al.detail, al.created_at, u.name
-                FROM activity_logs al
-                LEFT JOIN users u ON al.user_id = u.id
-                WHERE al.action = %s
-                ORDER BY al.created_at DESC
-                LIMIT 200
-            """, (filter_action,))
-        else:
-            cursor.execute("""
-                SELECT al.action, al.detail, al.created_at, u.name
-                FROM activity_logs al
-                LEFT JOIN users u ON al.user_id = u.id
-                ORDER BY al.created_at DESC
-                LIMIT 200
-            """)
+        # Base query untuk menghitung total dan mengambil data
+        count_query = "SELECT COUNT(al.id) AS total FROM activity_logs al LEFT JOIN users u ON al.user_id = u.id WHERE 1=1"
+        data_query = "SELECT al.action, al.detail, al.created_at, u.name FROM activity_logs al LEFT JOIN users u ON al.user_id = u.id WHERE 1=1"
+        
+        params = []
+        
+        # 1. Filter Action
+        if action:
+            count_query += " AND al.action = %s"
+            data_query += " AND al.action = %s"
+            params.append(action)
+            
+        # 2. Filter Date (Kalender)
+        if date:
+            count_query += " AND DATE(al.created_at) = %s"
+            data_query += " AND DATE(al.created_at) = %s"
+            params.append(date)
+            
+        # 3. Filter Time (Dropdown Rentang Waktu)
+        if time == "mingguan":
+            count_query += " AND al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+            data_query += " AND al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+        elif time == "bulanan":
+            count_query += " AND al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+            data_query += " AND al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+        elif time == "tahunan":
+            count_query += " AND al.created_at >= DATE_SUB(NOW(), INTERVAL 365 DAY)"
+            data_query += " AND al.created_at >= DATE_SUB(NOW(), INTERVAL 365 DAY)"
+
+        # Hitung Total Data (setelah difilter)
+        cursor.execute(count_query, tuple(params))
+        total_data = cursor.fetchone()["total"]
+        
+        # Hitung Pagination
+        if page < 1: page = 1
+        total_pages = math.ceil(total_data / per_page) if total_data > 0 else 1
+        offset = (page - 1) * per_page
+        
+        # Ambil Data (setelah difilter + dilimit)
+        data_query += " ORDER BY al.created_at DESC LIMIT %s OFFSET %s"
+        params.extend([per_page, offset])
+        
+        cursor.execute(data_query, tuple(params))
         logs = cursor.fetchall()
+        
     finally:
         cursor.close()
         db.close()
 
     return templates.TemplateResponse("admin/logs.html", {
         "request": request, "user": user, "logs": logs,
-        "active_page": "logs", "filter_action": filter_action
+        "active_page": "logs",
+        "filter_action": action, "time_filter": time, "date_filter": date,
+        "page": page, "total_pages": total_pages, "total_data": total_data
     })
 
 

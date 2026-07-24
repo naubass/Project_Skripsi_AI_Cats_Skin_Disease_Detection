@@ -9,6 +9,7 @@ from datetime import datetime
 import numpy as np
 from fastapi import APIRouter, Request, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+import math
 
 from database import (
     get_db, get_disease_info_dict, log_activity,
@@ -115,35 +116,70 @@ async def get_prediction_image(request: Request, prediction_id: int):
 
 
 @router.get("/history", response_class=HTMLResponse)
-async def history_page(request: Request):
+async def history_page(request: Request, page: int = 1, per_page: int = 10):
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+        
+    if page < 1:
+        page = 1
+
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
+        # Ambil SELURUH data prediksi user ini untuk grafik
         cursor.execute(
-            "SELECT id, predicted_class, label, confidence, description, created_at, visit_confirmed FROM predictions WHERE user_id = %s ORDER BY created_at DESC LIMIT 50",
+            "SELECT id, predicted_class, label, confidence, description, created_at, visit_confirmed FROM predictions WHERE user_id = %s ORDER BY created_at DESC",
             (user["id"],)
         )
-        records = cursor.fetchall()
-        disease_info = get_disease_info_dict()
-        for r in records:
-            info = disease_info.get(r["predicted_class"], {})
-            r["emoji"] = info.get("emoji", "❓")
-            r["color"] = info.get("color", "#888")
-            r["advice"] = info.get("advice", [])
+        all_raw = cursor.fetchall()
     finally:
         cursor.close()
         db.close()
 
-    notes_map = get_doctor_notes_for_predictions([r["id"] for r in records])
+    total_data = len(all_raw)
+    total_pages = math.ceil(total_data / per_page) if total_data > 0 else 1
+    offset = (page - 1) * per_page
+    
+    disease_info = get_disease_info_dict()
+    
+    # 1. Siapkan ALL RECORDS untuk JS Chart (Full Data)
+    all_records = []
+    for r in all_raw:
+        info = disease_info.get(r["predicted_class"], {})
+        row = dict(r)
+        row["emoji"] = info.get("emoji", "❓")
+        row["color"] = info.get("color", "#888")
+        # Format tanggal khusus untuk chart (DD/MM HH:MM)
+        if row.get("created_at"):
+            row["chart_date"] = row["created_at"].strftime("%d/%m %H:%M")
+        else:
+            row["chart_date"] = "-"
+        all_records.append(row)
+        
+    # 2. Siapkan RECORDS untuk Tabel HTML (Pagination Limit 10)
+    paginated_raw = all_raw[offset:offset+per_page]
+    records = []
+    prediction_ids = [r["id"] for r in paginated_raw]
+    
+    for r in paginated_raw:
+        info = disease_info.get(r["predicted_class"], {})
+        row = dict(r)
+        row["emoji"] = info.get("emoji", "❓")
+        row["color"] = info.get("color", "#888")
+        row["advice"] = info.get("advice", [])
+        records.append(row)
+
+    notes_map = get_doctor_notes_for_predictions(prediction_ids) if prediction_ids else {}
     for r in records:
         notes = notes_map.get(r["id"], [])
         r["doctor_notes"] = notes
         r["need_visit"] = any(n["need_visit"] for n in notes)
 
     return templates.TemplateResponse("history.html", {
-        "request": request, "user": user, "records": records,
+        "request": request, "user": user, 
+        "records": records, 
+        "all_records": all_records, # Data penuh untuk chart
         "clinic": get_clinic_info(),
+        "page": page, "total_pages": total_pages, "total_data": total_data
     })
