@@ -8,11 +8,12 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 import math
+import uuid
 
 from database import (
     get_db, get_disease_info_dict, log_activity,
     add_doctor_note, delete_doctor_note, get_doctor_notes_for_predictions,
-    confirm_visit,
+    confirm_visit, approve_telemed_request
 )
 from core.state import templates
 from core.dependencies import require_role
@@ -177,9 +178,11 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         cursor.execute(
             """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at,
                       p.visit_confirmed, p.visit_confirmed_at,
-                      lk.status AS visit_status, lk.visit_date AS booking_datetime, lk.catatan_kunjungan
+                      lk.status AS visit_status, lk.visit_date AS booking_datetime, lk.catatan_kunjungan,
+                      ko.status AS telemed_status, ko.room_id AS telemed_room_id, ko.scheduled_at AS telemed_date
                FROM predictions p
                LEFT JOIN laporan_kunjungan lk ON lk.prediction_id = p.id
+               LEFT JOIN konsultasi_online ko ON ko.prediction_id = p.id
                WHERE p.user_id = %s ORDER BY p.created_at DESC""",
             (patient_id,)
         )
@@ -209,6 +212,11 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
             row["visit_confirmed_at"] = row["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
         if row.get("booking_datetime") and isinstance(row["booking_datetime"], datetime):
             row["booking_datetime"] = row["booking_datetime"].strftime("%Y-%m-%d %H:%M")
+            
+        # 🔻 TAMBAHKAN KODE INI 🔻
+        if row.get("telemed_date") and isinstance(row["telemed_date"], datetime):
+            row["telemed_date"] = row["telemed_date"].strftime("%Y-%m-%d %H:%M")
+        # 🔺 BATAS KODE TAMBAHAN 🔺
 
         all_records.append(row)
 
@@ -242,6 +250,13 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
             row["visit_confirmed_at"] = row["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
         if row.get("created_at") and isinstance(row["created_at"], datetime):
             row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
+            
+        # 🔻 TAMBAHKAN KODE INI 🔻
+        if row.get("telemed_date") and isinstance(row["telemed_date"], datetime):
+            row["telemed_date_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
+            # Ubah objek aslinya jadi string juga untuk menghindari error JSON
+            row["telemed_date"] = row["telemed_date"].strftime("%Y-%m-%d %H:%M")
+        # 🔺 BATAS KODE TAMBAHAN 🔺
             
         records.append(row)
 
@@ -444,3 +459,18 @@ async def dokter_update_disease_info(
         db.close()
 
     return RedirectResponse(f"/dokter/disease-info?msg=Info '{label}' berhasil diperbarui", status_code=302)
+
+@router.post("/dokter/patients/{patient_id}/approve-telemed/{prediction_id}")
+async def dokter_approve_telemed(request: Request, patient_id: int, prediction_id: int):
+    """Dokter menyetujui request video call dari pasien."""
+    user = require_role(request, ["dokter"])
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    room_id = f"room-{prediction_id}-{uuid.uuid4().hex[:6]}"
+
+    # Simpan ke database
+    approve_telemed_request(prediction_id, user["id"], room_id)
+    log_activity(user["id"], "approve_telemed", f"Menyetujui konsultasi online #{prediction_id}, Room: {room_id}")
+
+    return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)

@@ -298,6 +298,24 @@ def init_db():
             conn.commit()
         except Error: pass
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS konsultasi_online(
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                prediction_id INT NOT NULL,
+                user_id INT NOT NULL,
+                doctor_id INT NULL,
+                room_id VARCHAR(100) NULL,
+                scheduled_at DATETIME NOT NULL,
+                status ENUM('menunggu', 'disetujui', 'selesai', 'batal') NOT NULL DEFAULT 'menunggu',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        conn.commit()
+
         # ── Seed data default ──
         cursor.execute("SELECT COUNT(*) FROM disease_info")
         if cursor.fetchone()[0] == 0:
@@ -646,3 +664,70 @@ def get_pending_recommendations(search: str = None) -> list:
     finally:
         cursor.close()
         conn.close()
+
+# Helper: Konsultasi Online
+def save_telemed_request(prediction_id: int, user_id: int, scheduled_at: datetime):
+    """Menyimpan pengajuan konsultasi online (video call) dari user."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id FROM konsultasi_online WHERE prediction_id = %s", (prediction_id,))
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.execute(
+                """UPDATE konsultasi_online
+                   SET scheduled_at = %s, status = 'menunggu', doctor_id = NULL, room_id = NULL
+                   WHERE prediction_id = %s""",
+                (scheduled_at, prediction_id)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO konsultasi_online (prediction_id, user_id, scheduled_at, status)
+                   VALUES (%s, %s, %s, 'menunggu')""",
+                (prediction_id, user_id, scheduled_at)
+            )
+        db.commit()
+    finally:
+        cursor.close()
+        db.close()
+
+def approve_telemed_request(prediction_id: int, doctor_id: int, room_id: str):
+    """Dokter menyetujui pengajuan konsultasi online dan membuat Room ID."""
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            """UPDATE konsultasi_online 
+               SET doctor_id = %s, room_id = %s, status = 'disetujui'
+               WHERE prediction_id = %s""",
+            (doctor_id, room_id, prediction_id)
+        )
+
+        # Tandai prediksi sudah terkonfirmasi
+        cursor.execute(
+            "UPDATE predictions SET visit_confirmed = 1, visit_confirmed_at = NOW() WHERE id = %s",
+            (prediction_id,)
+        )
+        db.commit()
+    finally:
+        cursor.close()
+        db.close()
+
+def cancel_telemed_request(prediction_id: int, user_id: int):
+    """Membatalkan pengajuan konsultasi online."""
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "UPDATE konsultasi_online SET status = 'batal' WHERE prediction_id = %s AND user_id = %s",
+            (prediction_id, user_id)
+        )
+        cursor.execute(
+            "UPDATE predictions SET visit_confirmed = 0, visit_confirmed_at = NULL WHERE id = %s AND user_id = %s",
+            (prediction_id, user_id)
+        )
+        db.commit()
+    finally:
+        cursor.close()
+        db.close()

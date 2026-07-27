@@ -187,7 +187,6 @@
       border-color: var(--purple-mid) !important;
       box-shadow: 0 4px 12px rgba(76,47,160,0.3);
     }
-    /* Style Tombol Terkunci / Disabled */
     .time-slot-btn:disabled {
       background: #e5e7eb !important;
       color: #9ca3af !important;
@@ -215,7 +214,6 @@
       </div>
     </a>
     <div class="flex items-center gap-3">
-      <!-- User Dropdown -->
       <div class="relative" id="nav-dropdown-wrapper">
         <button onclick="toggleNavDropdown()" id="nav-dropdown-btn"
           class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all hover:shadow-md max-w-[120px] md:max-w-none"
@@ -259,7 +257,6 @@
   </div>
 </nav>
 
-
 <!-- HERO STRIP -->
 <div class="hero-strip pt-32 pb-14 px-6">
   <div class="paw-bg"></div>
@@ -279,7 +276,6 @@
     </div>
   </div>
 </div>
-
 
 <!-- MAIN CONTENT -->
 <main class="pb-24 px-6 -mt-6">
@@ -318,7 +314,6 @@
       </div>
     </div>
 
-
     <!-- Charts Row -->
     <div class="grid md:grid-cols-3 gap-5 mb-8 afu afu-d2">
       <div class="chart-card flex flex-col">
@@ -345,7 +340,6 @@
       </div>
     </div>
 
-
     <!-- Bar: Frekuensi full width -->
     <div class="chart-card mb-8 afu afu-d3">
       <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
@@ -359,7 +353,6 @@
         <canvas id="chartBar"></canvas>
       </div>
     </div>
-
 
     <!-- History List -->
     <div class="afu afu-d4">
@@ -413,7 +406,15 @@
                 {% endif %}
 
                 <!-- BADGE STATUS PRESISI UNTUK USER / HISTORY -->
-                {% if r.visit_status == 'selesai' %}
+                {% if r.telemed_status == 'disetujui' %}
+                <span class="badge-conf" style="background:#e0f2fe;color:#0369a1">
+                  💻 Telemedicine Disetujui
+                </span>
+                {% elif r.telemed_status == 'menunggu' %}
+                <span class="badge-conf" style="background:#fef3c7;color:#b45309">
+                  ⏳ Menunggu Dokter
+                </span>
+                {% elif r.visit_status == 'selesai' or r.telemed_status == 'selesai' %}
                 <span class="badge-conf" style="background:#e6f7ec;color:#1f9254">
                   ✅ Sudah Kunjungan
                 </span>
@@ -443,7 +444,7 @@
               <button onclick="openDetailModal('{{ r.id }}')"
                       class="mt-1.5 text-[11px] font-semibold hover:opacity-70 transition-opacity"
                       style="color:var(--purple-mid)">
-                📄 Lihat detail & booking →
+                📄 Lihat detail & kelola kunjungan →
               </button>
             </div>
           </div>
@@ -507,14 +508,30 @@
               <div id="modal-notes" class="mt-2 space-y-2"></div>
             </div>
 
-            <!-- Notifikasi perlu kunjungan + Form Booking -->
-            <div id="modal-visit-alert" class="hidden rounded-2xl p-4 transition-all" style="background:#fdeceb;border:1px solid #f3b9b3">
-              <p class="text-sm font-bold mb-1" style="color:#c0392b">🏥 Dokter menyarankan kunjungan langsung ke klinik</p>
-              <p class="text-xs font-semibold" style="color:var(--text-dark)">{{ clinic.name }}</p>
+            <!-- Notifikasi Pengajuan Kunjungan / Online -->
+            <div id="modal-visit-alert" class="hidden rounded-2xl p-4 transition-all" style="background:#fdf8ec;border:1px solid #f5e3a3">
+              <p id="alert-header-text" class="text-sm font-bold mb-1" style="color:var(--purple-deep)">💻 Ajukan Konsultasi ke Dokter</p>
               <p class="text-xs mt-0.5" style="color:var(--text-mid)">
-                <a href="{{ clinic.phone_wa_link }}" target="_blank" class="font-semibold hover:opacity-70" style="color:var(--purple-mid)">{{ clinic.phone }}</a>
+                <a href="{{ clinic.phone_wa_link }}" target="_blank" class="font-semibold hover:opacity-70" style="color:var(--purple-mid)">{{ clinic.name }}</a>
                 · {{ clinic.address }}
               </p>
+
+              <!-- KOTAK TELEMEDICINE: DISETUJUI -->
+              <div id="telemed-approved-box" class="hidden mt-4 p-4 rounded-xl border bg-blue-50 border-blue-200">
+                <p class="text-sm font-bold text-blue-800 mb-2">✅ Konsultasi Online Disetujui</p>
+                <p class="text-xs text-blue-700 mb-3">Dokter telah membuka ruangan. Silakan masuk sekarang.</p>
+                <a id="telemed-join-btn" href="#" target="_blank" 
+                   class="block w-full py-2.5 text-center text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors">
+                   📹 Masuk Ruang Video Call
+                </a>
+              </div>
+
+              <!-- KOTAK TELEMEDICINE: MENUNGGU -->
+              <div id="telemed-waiting-box" class="hidden mt-4 p-3 rounded-xl border bg-yellow-50 border-yellow-200">
+                <p class="text-xs font-bold text-yellow-800 text-center">
+                  ⏳ Pengajuan Konsultasi Online sedang menunggu persetujuan Dokter.
+                </p>
+              </div>
 
               <!-- KOTAK NOTIFIKASI JIKA DOKTER MEMINTA RESCHEDULE -->
               <div id="reschedule-info-box" class="hidden mt-3 p-3 bg-red-100 border border-red-300 rounded-xl">
@@ -531,7 +548,19 @@
 
               <!-- Form Booking Slot Jam -->
               <form id="booking-form" method="POST" action="" class="mt-4 p-3.5 bg-white rounded-xl border space-y-3 shadow-sm" style="border-color:rgba(212,168,67,0.3)">
-                <p class="text-xs font-bold" style="color:var(--purple-deep)">📅 Pilih Jadwal Kedatangan Anda:</p>
+                <p class="text-xs font-bold" style="color:var(--purple-deep)">📅 Pilih Jadwal Kedatangan / Online:</p>
+
+                <div class="mb-3">
+                  <label class="text-[11px] font-bold block mb-1" style="color:var(--text-soft)">Jenis Konsultasi *</label>
+                  <div class="flex gap-2">
+                    <label class="flex-1 border p-2 rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-2 transition-all hover:bg-purple-50" style="border-color:var(--purple-pale); color:var(--purple-deep)">
+                      <input type="radio" name="jenis_kunjungan" value="fisik" checked class="accent-purple-600"> 🏥 Fisik
+                    </label>
+                    <label class="flex-1 border p-2 rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-2 transition-all hover:bg-purple-50" style="border-color:var(--purple-pale); color:var(--purple-deep)">
+                      <input type="radio" name="jenis_kunjungan" value="online" class="accent-purple-600"> 💻 Online
+                    </label>
+                  </div>
+                </div>
                 
                 <div>
                   <label class="text-[11px] font-bold block mb-1" style="color:var(--text-soft)">Pilih Tanggal *</label>
@@ -574,7 +603,7 @@
 
             <!-- Info kunjungan selesai -->
             <div id="modal-visit-done" class="hidden rounded-xl p-4" style="background:#e6f7ec;border:1px solid #a7dfba">
-              <p class="text-sm font-bold" style="color:#1f9254">✅ Kunjungan ke klinik sudah dikonfirmasi / selesai</p>
+              <p class="text-sm font-bold" style="color:#1f9254">✅ Kunjungan/Konsultasi telah selesai</p>
             </div>
           </div>
         </div>
@@ -617,7 +646,6 @@
   </div>
 </main>
 
-
 <!-- SCRIPTS -->
 <script>
 function toggleNavDropdown() {
@@ -644,15 +672,16 @@ function openDetailModal(id) {
   if (!rec) return;
 
   const modal      = document.getElementById('detail-modal');
-  const modalImg    = document.getElementById('modal-img');
-  const modalLabel  = document.getElementById('modal-label');
-  const modalConf   = document.getElementById('modal-conf');
+  const modalImg   = document.getElementById('modal-img');
+  const modalLabel = document.getElementById('modal-label');
+  const modalConf  = document.getElementById('modal-conf');
   const modalHeader = document.getElementById('modal-header');
-  const modalDesc   = document.getElementById('modal-description');
+  const modalDesc  = document.getElementById('modal-description');
   const modalAdvice = document.getElementById('modal-advice');
   const modalNotesWrap = document.getElementById('modal-notes-wrap');
   const modalNotes  = document.getElementById('modal-notes');
   const modalAlert  = document.getElementById('modal-visit-alert');
+  const alertHeader = document.getElementById('alert-header-text');
   const modalVisitDone = document.getElementById('modal-visit-done');
 
   modalImg.src = '/predictions/' + id + '/image';
@@ -689,62 +718,77 @@ function openDetailModal(id) {
     modalNotesWrap.classList.add('hidden');
   }
 
-  // Handle Form Booking & Reschedule Info
+  // Handle Form Booking & Telemedicine UI
   const bookingForm   = document.getElementById('booking-form');
   const cancelForm    = document.getElementById('cancel-booking-form');
   const scheduledBox  = document.getElementById('scheduled-info-box');
   const scheduledText = document.getElementById('scheduled-time-text');
   const rescheduleBox = document.getElementById('reschedule-info-box');
   const rescheduleText = document.getElementById('reschedule-reason-text');
+  
+  const telemedApprovedBox = document.getElementById('telemed-approved-box');
+  const telemedWaitingBox = document.getElementById('telemed-waiting-box');
+  const telemedJoinBtn = document.getElementById('telemed-join-btn');
 
-  if (rec.need_visit && rec.visit_status !== 'selesai') {
-    modalAlert.classList.remove('hidden');
-    modalVisitDone.classList.add('hidden');
+  // Ganti teks header jika dokter merekomendasikan kunjungan
+  if (rec.need_visit) {
+      alertHeader.textContent = '🏥 Dokter menyarankan kunjungan langsung ke klinik';
+      alertHeader.style.color = '#c0392b';
+      modalAlert.style.background = '#fdeceb';
+      modalAlert.style.border = '1px solid #f3b9b3';
+  } else {
+      alertHeader.textContent = '💻 Ajukan Konsultasi ke Dokter';
+      alertHeader.style.color = 'var(--purple-deep)';
+      modalAlert.style.background = '#fdf8ec';
+      modalAlert.style.border = '1px solid #f5e3a3';
+  }
 
-    bookingForm.action = '/predictions/' + id + '/book';
-    cancelForm.action  = '/predictions/' + id + '/cancel-booking';
+  const isSelesai = rec.visit_status === 'selesai' || rec.telemed_status === 'selesai';
 
-    const today = new Date().toISOString().split('T')[0];
-    const dateInput = document.getElementById('booking-date');
-    dateInput.min = today;
-
-    if (rec.visit_status === 'terjadwal') {
-      scheduledBox.classList.remove('hidden');
-      rescheduleBox.classList.add('hidden');
-      scheduledText.textContent = rec.booking_formatted;
-      cancelForm.classList.remove('hidden'); 
-      bookingForm.classList.add('hidden');  
-    } else if (rec.visit_status === 'batal') {
-      // DOKTER MINTA RESCHEDULE
-      scheduledBox.classList.add('hidden');
-      cancelForm.classList.add('hidden');
-      bookingForm.classList.remove('hidden');
-      
-      // TAMPILKAN ALASAN RESCHEDULE DARI DOKTER
-      if (rec.catatan_kunjungan) {
-        rescheduleBox.classList.remove('hidden');
-        rescheduleText.textContent = rec.catatan_kunjungan;
-      } else {
-        rescheduleBox.classList.add('hidden');
-      }
-
-      dateInput.value = today;
-      setTimeout(fetchBookedSlots, 50); // Panggil pengecekan slot jam
-    } else {
-      // BELUM BOOKING
-      scheduledBox.classList.add('hidden');
-      rescheduleBox.classList.add('hidden');
-      cancelForm.classList.add('hidden');
-      bookingForm.classList.remove('hidden');
-      dateInput.value = today;
-      setTimeout(fetchBookedSlots, 50); // Panggil pengecekan slot jam
-    }
-  } else if (rec.visit_status === 'selesai') {
+  if (isSelesai) {
     modalAlert.classList.add('hidden');
     modalVisitDone.classList.remove('hidden');
   } else {
-    modalAlert.classList.add('hidden');
+    modalAlert.classList.remove('hidden');
     modalVisitDone.classList.add('hidden');
+
+    // Sembunyikan semua elemen dinamis di dalam alert box terlebih dahulu
+    scheduledBox.classList.add('hidden');
+    rescheduleBox.classList.add('hidden');
+    bookingForm.classList.add('hidden');
+    cancelForm.classList.add('hidden');
+    telemedApprovedBox.classList.add('hidden');
+    telemedWaitingBox.classList.add('hidden');
+
+    if (rec.telemed_status === 'disetujui' && rec.telemed_room_id) {
+        // Tampilkan tombol join Telemedicine
+        telemedApprovedBox.classList.remove('hidden');
+        telemedJoinBtn.href = '/telemed/' + rec.telemed_room_id;
+    } else if (rec.telemed_status === 'menunggu') {
+        // Tampilkan info menunggu konfirmasi Telemedicine
+        telemedWaitingBox.classList.remove('hidden');
+    } else if (rec.visit_status === 'terjadwal') {
+        // Tampilkan info jadwal fisik
+        scheduledBox.classList.remove('hidden');
+        scheduledText.textContent = rec.booking_formatted;
+        cancelForm.action = '/predictions/' + id + '/cancel-booking';
+        cancelForm.classList.remove('hidden'); 
+    } else {
+        // Tampilkan Form Booking Kunjungan/Online
+        bookingForm.action = '/predictions/' + id + '/book';
+        bookingForm.classList.remove('hidden');
+        
+        if (rec.visit_status === 'batal' && rec.catatan_kunjungan) {
+            rescheduleBox.classList.remove('hidden');
+            rescheduleText.textContent = rec.catatan_kunjungan;
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = document.getElementById('booking-date');
+        dateInput.min = today;
+        dateInput.value = today;
+        setTimeout(fetchBookedSlots, 50);
+    }
   }
 
   modal.classList.remove('hidden');
@@ -831,6 +875,8 @@ const RECORD_DETAILS = {
     booking_date: {{ (r.booking_date if r.booking_date else '')|tojson }},
     booking_time: {{ (r.booking_time if r.booking_time else '')|tojson }},
     booking_formatted: {{ (r.booking_formatted if r.booking_formatted else '')|tojson }},
+    telemed_status: {{ (r.telemed_status or '')|tojson }},
+    telemed_room_id: {{ (r.telemed_room_id or '')|tojson }},
     notes: [
       {% for n in r.doctor_notes %}
       {
