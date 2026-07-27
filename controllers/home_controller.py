@@ -14,7 +14,8 @@ import math
 from database import (
     get_db, get_disease_info_dict, log_activity,
     get_clinic_info, get_doctor_notes_for_predictions,
-    get_booked_slots, save_user_booking, cancel_user_booking, auto_update_expired_visits
+    get_booked_slots, save_user_booking, cancel_user_booking, auto_update_expired_visits,
+    save_user_booking, save_telemed_request
 )
 from core.state import templates
 from core.dependencies import get_current_user
@@ -129,7 +130,8 @@ async def book_visit_appointment(
     request: Request,
     prediction_id: int,
     visit_date: str = Form(...), # Format: YYYY-MM-DD
-    visit_time: str = Form(...)  # Format: HH:MM
+    visit_time: str = Form(...),  # Format: HH:MM
+    jenis_kunjungan: str = Form("fisik") # <-- Parameter ini akan menangkap value "fisik" atau "online"
 ):
     user = get_current_user(request)
     if not user:
@@ -146,10 +148,20 @@ async def book_visit_appointment(
     if visit_time.strip() in existing_slots:
         return RedirectResponse("/history?error=Maaf, jam tersebut baru saja di-booking orang lain.", status_code=302)
 
-    save_user_booking(prediction_id, user["id"], booking_dt)
-    log_activity(user["id"], "book_visit", f"Booking kunjungan #{prediction_id} pada {dt_str}")
+    # ─── MODIFIKASI LOGIKA PENYIMPANAN DI SINI ───
+    if jenis_kunjungan == "online":
+        # Simpan ke tabel konsultasi_online
+        save_telemed_request(prediction_id, user["id"], booking_dt)
+        tipe_log = "Konsultasi Online"
+    else:
+        # Simpan ke tabel laporan_kunjungan (fisik) seperti biasa
+        save_user_booking(prediction_id, user["id"], booking_dt)
+        tipe_log = "Kunjungan Fisik"
 
-    return RedirectResponse("/history?msg=Jadwal kunjungan berhasil di-booking!", status_code=302)
+    # Catat ke log aktivitas dengan tipe yang sesuai
+    log_activity(user["id"], "book_visit", f"Pengajuan {tipe_log} #{prediction_id} pada {dt_str}")
+
+    return RedirectResponse(f"/history?msg=Pengajuan {tipe_log} berhasil dikirim!", status_code=302)
 
 
 @router.post("/predictions/{prediction_id}/cancel-booking")
@@ -179,13 +191,15 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # PENTING: Tambahkan lk.catatan_kunjungan di query SELECT
+        # Query untuk mengambil semua data kunjungan
         cursor.execute(
             """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at, 
-                      p.visit_confirmed, lk.status AS visit_status, lk.visit_date AS booking_datetime,
-                      lk.catatan_kunjungan
+                      p.visit_confirmed, 
+                      lk.status AS visit_status, lk.visit_date AS booking_datetime, lk.catatan_kunjungan,
+                      ko.status AS telemed_status, ko.room_id AS telemed_room_id, ko.scheduled_at AS telemed_date
                FROM predictions p
                LEFT JOIN laporan_kunjungan lk ON lk.prediction_id = p.id
+               LEFT JOIN konsultasi_online ko ON ko.prediction_id = p.id
                WHERE p.user_id = %s 
                ORDER BY p.created_at DESC""",
             (user["id"],)
@@ -201,7 +215,7 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
     
     disease_info = get_disease_info_dict()
     
-    # 1. ALL RECORDS untuk JS Chart
+    # ALL RECORDS untuk JS Chart
     all_records = []
     for r in all_raw:
         info = disease_info.get(r["predicted_class"], {})
@@ -214,7 +228,7 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
             row["chart_date"] = "-"
         all_records.append(row)
         
-    # 2. RECORDS untuk Tabel HTML
+    # RECORDS untuk Tabel HTML
     paginated_raw = all_raw[offset:offset+per_page]
     records = []
     prediction_ids = [r["id"] for r in paginated_raw]
@@ -226,7 +240,7 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
         row["color"] = info.get("color", "#888")
         row["advice"] = info.get("advice", [])
         
-        # Format tanggal & jam booking jika ada
+        # Format tanggal & jam booking fisik jika ada
         if row.get("booking_datetime"):
             row["booking_date"] = row["booking_datetime"].strftime("%Y-%m-%d")
             row["booking_time"] = row["booking_datetime"].strftime("%H:%M")
@@ -235,6 +249,10 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
             row["booking_date"] = ""
             row["booking_time"] = ""
             row["booking_formatted"] = ""
+
+        # Format tanggal & jam booking konsultasi online jika ada
+        if row.get("telemed_date"):
+            row["telemed_date_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
 
         records.append(row)
 

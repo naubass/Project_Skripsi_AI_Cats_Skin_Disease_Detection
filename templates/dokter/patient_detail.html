@@ -213,6 +213,26 @@
                 </div>
               </form>
 
+              <!-- 🔻 BLOK KONSULTASI ONLINE (TELEMEDICINE) 🔻 -->
+              {% if r.telemed_status == 'menunggu' %}
+                <div class="mt-3 p-3 rounded-xl border bg-blue-50 border-blue-200">
+                  <p class="text-xs font-bold text-blue-800 mb-2">🔔 Pasien merequest Konsultasi Online (Video Call)</p>
+                  <form method="POST" action="/dokter/patients/{{ patient.id }}/approve-telemed/{{ r.id }}">
+                    <button type="submit" class="w-full text-xs font-bold px-3.5 py-2 rounded-lg text-white shadow-md transition-transform hover:scale-[1.02] flex items-center justify-center gap-1.5" style="background:#2563eb">
+                      ✅ Setujui & Buat Ruang Video Call
+                    </button>
+                  </form>
+                </div>
+              {% elif r.telemed_status == 'disetujui' and r.telemed_room_id %}
+                <div class="mt-3 p-3 rounded-xl border bg-blue-50 border-blue-200">
+                  <p class="text-xs font-bold text-blue-800 mb-2">✅ Konsultasi Online Telah Disetujui</p>
+                  <a href="/telemed/{{ r.telemed_room_id }}" target="_blank" class="block w-full text-center text-xs font-bold px-3.5 py-2 rounded-lg text-white shadow-sm transition-colors bg-blue-600 hover:bg-blue-700">
+                    📹 Masuk Ruang Video Call
+                  </a>
+                </div>
+              {% endif %}
+              <!-- 🔺 BATAS BLOK KONSULTASI ONLINE 🔺 -->
+
               <!-- Tombol Aksi & Informasi Status untuk Dokter -->
               {% if r.visit_status == 'terjadwal' %}
                 <button type="button" onclick='openConfirmModal({{ r.id }}, {{ patient.id }}, {{ r | tojson }})'
