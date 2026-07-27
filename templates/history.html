@@ -416,7 +416,7 @@
                 </span>
                 {% elif r.visit_status == 'selesai' or r.telemed_status == 'selesai' %}
                 <span class="badge-conf" style="background:#e6f7ec;color:#1f9254">
-                  ✅ Sudah Kunjungan
+                  ✅ Sudah Konsultasi
                 </span>
                 {% elif r.visit_status == 'terjadwal' %}
                 <span class="badge-conf" style="background:#fef3c7;color:#b45309">
@@ -743,7 +743,8 @@ function openDetailModal(id) {
       modalAlert.style.border = '1px solid #f5e3a3';
   }
 
-  const isSelesai = rec.visit_status === 'selesai' || rec.telemed_status === 'selesai';
+  // Selesai hanya jika benar-benar kunjungan fisik yang selesai
+  const isSelesai = rec.visit_status === 'selesai' && rec.telemed_status !== 'selesai';
 
   if (isSelesai) {
     modalAlert.classList.add('hidden');
@@ -760,8 +761,9 @@ function openDetailModal(id) {
     telemedApprovedBox.classList.add('hidden');
     telemedWaitingBox.classList.add('hidden');
 
-    if (rec.telemed_status === 'disetujui' && rec.telemed_room_id) {
-        // Tampilkan tombol join Telemedicine
+    // Jika telemed sudah selesai (baru di-end), jangan tampilkan tombol join lagi, tapi tampilkan form booking normal
+    if (rec.telemed_status === 'disetujui' && rec.telemed_room_id && rec.telemed_status !== 'selesai') {
+        // Tampilkan tombol join Telemedicine jika belum di-end
         telemedApprovedBox.classList.remove('hidden');
         telemedJoinBtn.href = '/telemed/' + rec.telemed_room_id;
     } else if (rec.telemed_status === 'menunggu') {
@@ -774,7 +776,7 @@ function openDetailModal(id) {
         cancelForm.action = '/predictions/' + id + '/cancel-booking';
         cancelForm.classList.remove('hidden'); 
     } else {
-        // Tampilkan Form Booking Kunjungan/Online
+        // Tampilkan Form Booking Kunjungan/Online kembali (karena call sudah di-end atau belum booking)
         bookingForm.action = '/predictions/' + id + '/book';
         bookingForm.classList.remove('hidden');
         
@@ -785,9 +787,11 @@ function openDetailModal(id) {
 
         const today = new Date().toISOString().split('T')[0];
         const dateInput = document.getElementById('booking-date');
-        dateInput.min = today;
-        dateInput.value = today;
-        setTimeout(fetchBookedSlots, 50);
+        if (dateInput) {
+            dateInput.min = today;
+            dateInput.value = today;
+            setTimeout(fetchBookedSlots, 50);
+        }
     }
   }
 
