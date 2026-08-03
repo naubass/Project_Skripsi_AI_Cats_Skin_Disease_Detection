@@ -16,6 +16,7 @@ DB_CONFIG = {
     "password"        : os.getenv("DB_PASSWORD", ""),
     "database"        : os.getenv("DB_NAME",     "catskindisease"),
     "connect_timeout" : 5,
+    "use_pure": True,
 }
 
 # ── Koneksi dengan retry ─────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from core.state import templates
@@ -48,11 +49,9 @@ async def view_telemed_room(room_id: str, request: Request):
         cursor.close()
         conn.close()
     
-    # Cek apakah status selesai/batal atau belum waktunya
     if not record or record.get("status") in ["selesai", "batal"]:
         return HTMLResponse("<h3>❌ Sesi konsultasi ini telah berakhir atau dibatalkan.</h3>", status_code=403)
         
-    # Validasi waktu (Opsional: Berikan toleransi misalnya 10 menit sebelum jadwal)
     scheduled_at = record.get("scheduled_at")
     if scheduled_at and datetime.now() < scheduled_at:
         return HTMLResponse(f"<h3>⏳ Belum waktunya. Ruang konsultasi baru dapat diakses pada: {scheduled_at}</h3>", status_code=403)
@@ -60,7 +59,11 @@ async def view_telemed_room(room_id: str, request: Request):
     return templates.TemplateResponse("telemed_room.html", {
         "request": request, 
         "user": user, 
-        "room_id": room_id
+        "room_id": room_id,
+        "turn_host": os.getenv("TURN_HOST"),
+        "turn_port": os.getenv("TURN_PORT", "3478"),
+        "turn_username": os.getenv("TURN_USERNAME"),
+        "turn_credential": os.getenv("TURN_CREDENTIAL"),
     })
 
 @router.websocket("/ws/telemed/{room_id}/{client_id}")
