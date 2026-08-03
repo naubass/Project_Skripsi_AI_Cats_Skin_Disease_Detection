@@ -763,9 +763,33 @@ function openDetailModal(id) {
 
     // Jika telemed sudah selesai (baru di-end), jangan tampilkan tombol join lagi, tapi tampilkan form booking normal
     if (rec.telemed_status === 'disetujui' && rec.telemed_room_id && rec.telemed_status !== 'selesai') {
-        // Tampilkan tombol join Telemedicine jika belum di-end
+        // Tampilkan kotak telemed disetujui
         telemedApprovedBox.classList.remove('hidden');
-        telemedJoinBtn.href = '/telemed/' + rec.telemed_room_id;
+
+        // 1. Ambil dan perbaiki format tanggal agar terbaca valid di JavaScript (ubah spasi jadi 'T')
+        let scheduleStr = rec.scheduled_at || "";
+        if (!scheduleStr && rec.booking_date) {
+            scheduleStr = rec.booking_date + "T" + (rec.booking_time || "00:00:00");
+        } else {
+            scheduleStr = scheduleStr.replace(" ", "T"); // "2026-08-04 10:00:00" -> "2026-08-04T10:00:00"
+        }
+
+        const scheduledTime = new Date(scheduleStr);
+        const now = new Date();
+
+        // 2. Cek apakah tanggal valid (!isNaN) DAN apakah waktu sekarang masih sebelum jadwal
+        if (!isNaN(scheduledTime) && now < scheduledTime) {
+            // Waktu belum tiba -> Tombol dikunci (abu-abu, mati)
+            telemedJoinBtn.className = "block w-full py-2.5 text-center text-sm font-bold text-gray-500 bg-gray-200 rounded-lg shadow-sm cursor-not-allowed pointer-events-none";
+            telemedJoinBtn.innerHTML = `⏳ Belum Waktunya (Dibuka ${rec.booking_formatted || scheduledTime.toLocaleString('id-ID')})`;
+            telemedJoinBtn.removeAttribute('href');
+        } else {
+            // Waktu sudah tiba/lewat -> Tombol aktif normal (biru)
+            telemedJoinBtn.className = "block w-full py-2.5 text-center text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors";
+            telemedJoinBtn.innerHTML = `📹 Masuk Ruang Video Call`;
+            telemedJoinBtn.href = '/telemed/' + rec.telemed_room_id;
+        }
+
     } else if (rec.telemed_status === 'menunggu') {
         // Tampilkan info menunggu konfirmasi Telemedicine
         telemedWaitingBox.classList.remove('hidden');
@@ -881,6 +905,7 @@ const RECORD_DETAILS = {
     booking_formatted: {{ (r.booking_formatted if r.booking_formatted else '')|tojson }},
     telemed_status: {{ (r.telemed_status or '')|tojson }},
     telemed_room_id: {{ (r.telemed_room_id or '')|tojson }},
+    scheduled_at: {{ (r.scheduled_at.strftime('%Y-%m-%d %H:%M:%S') if r.scheduled_at else '')|tojson }},
     notes: [
       {% for n in r.doctor_notes %}
       {

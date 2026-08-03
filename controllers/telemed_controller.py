@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from core.state import templates
 from core.dependencies import get_current_user
 from database import get_db
+from datetime import datetime
 import json
 
 router = APIRouter(tags=["telemed"])
@@ -34,12 +35,10 @@ manager = ConnectionManager()
 
 @router.get("/telemed/{room_id}", response_class=HTMLResponse)
 async def view_telemed_room(room_id: str, request: Request):
-    """Merender halaman UI Video Call sekaligus memvalidasi apakah room sudah berakhir."""
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    # Cek status record di tabel konsultasi_online menggunakan get_db()
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -49,10 +48,15 @@ async def view_telemed_room(room_id: str, request: Request):
         cursor.close()
         conn.close()
     
-    # JIKA RECORD TIDAK DITEMUKAN ATAU STATUSNYA SUDAH SELESAI / BATAL -> BLOKIR AKSES
-    if not record or record.get("status") == "selesai" or record.get("status") == "batal":
-        return HTMLResponse("<h3>❌ Sesi konsultasi ini telah berakhir atau ditutup oleh dokter. Ruangan tidak dapat diakses kembali.</h3>", status_code=403)
+    # Cek apakah status selesai/batal atau belum waktunya
+    if not record or record.get("status") in ["selesai", "batal"]:
+        return HTMLResponse("<h3>❌ Sesi konsultasi ini telah berakhir atau dibatalkan.</h3>", status_code=403)
         
+    # Validasi waktu (Opsional: Berikan toleransi misalnya 10 menit sebelum jadwal)
+    scheduled_at = record.get("scheduled_at")
+    if scheduled_at and datetime.now() < scheduled_at:
+        return HTMLResponse(f"<h3>⏳ Belum waktunya. Ruang konsultasi baru dapat diakses pada: {scheduled_at}</h3>", status_code=403)
+
     return templates.TemplateResponse("telemed_room.html", {
         "request": request, 
         "user": user, 

@@ -253,6 +253,11 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
         # Format tanggal & jam booking konsultasi online jika ada
         if row.get("telemed_date"):
             row["telemed_date_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
+            # PENTING: kirim juga sebagai scheduled_at (nama field yang dipakai template/JS)
+            row["scheduled_at"] = row["telemed_date"]
+            row["booking_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
+        else:
+            row["scheduled_at"] = None
 
         records.append(row)
 

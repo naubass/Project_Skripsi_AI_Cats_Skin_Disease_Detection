@@ -253,9 +253,12 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
             
         # 🔻 TAMBAHKAN KODE INI 🔻
         if row.get("telemed_date") and isinstance(row["telemed_date"], datetime):
+            row["telemed_time_reached"] = datetime.now() >= row["telemed_date"]
             row["telemed_date_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
             # Ubah objek aslinya jadi string juga untuk menghindari error JSON
             row["telemed_date"] = row["telemed_date"].strftime("%Y-%m-%d %H:%M")
+        else:
+            row["telemed_time_reached"] = False
         # 🔺 BATAS KODE TAMBAHAN 🔺
             
         records.append(row)

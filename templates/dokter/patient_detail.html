@@ -226,9 +226,17 @@
               {% elif r.telemed_status == 'disetujui' and r.telemed_room_id %}
                 <div class="mt-3 p-3 rounded-xl border bg-blue-50 border-blue-200">
                   <p class="text-xs font-bold text-blue-800 mb-2">✅ Konsultasi Online Telah Disetujui</p>
-                  <a href="/telemed/{{ r.telemed_room_id }}" target="_blank" class="block w-full text-center text-xs font-bold px-3.5 py-2 rounded-lg text-white shadow-sm transition-colors bg-blue-600 hover:bg-blue-700">
+                  {% if r.telemed_time_reached %}
+                  <a href="/telemed/{{ r.telemed_room_id }}" target="_blank"
+                    class="block w-full text-center text-xs font-bold px-3.5 py-2 rounded-lg text-white shadow-sm transition-colors bg-blue-600 hover:bg-blue-700">
                     📹 Masuk Ruang Video Call
                   </a>
+                  {% else %}
+                  <button type="button" disabled
+                          class="block w-full text-center text-xs font-bold px-3.5 py-2 rounded-lg text-gray-500 bg-gray-200 cursor-not-allowed">
+                    ⏳ Belum Waktunya (Dibuka {{ r.telemed_date_formatted }})
+                  </button>
+                  {% endif %}
                 </div>
               {% endif %}
               <!-- 🔺 BATAS BLOK KONSULTASI ONLINE 🔺 -->
