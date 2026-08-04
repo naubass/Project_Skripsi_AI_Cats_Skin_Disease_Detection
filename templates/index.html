@@ -312,10 +312,11 @@
             style="color:var(--text-mid)">
             <span class="text-base">🔬</span> Analisis
           </a>
-          <a href="/history"
-            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
-            style="color:var(--text-mid)">
+          <a href="/history" class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50" style="color:var(--text-mid)">
             <span class="text-base">📋</span> Riwayat
+          </a>
+          <a href="/pets" class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50" style="color:var(--text-mid)">
+            <span class="text-base">🐱</span> Kucing Saya
           </a>
           <a href="/chatbot"
             class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
@@ -441,6 +442,26 @@
             <p class="text-xs" style="color:var(--text-soft)">Format JPG, PNG, WEBP</p>
           </div>
         </div>
+
+        <!-- Pilih Kucing -->
+        <div class="mb-6">
+          <label class="text-[11px] font-bold block mb-1.5" style="color:var(--text-soft)">Kucing yang diperiksa (opsional)</label>
+          {% if pets and pets|length > 0 %}
+          <select id="pet-select" class="w-full text-sm p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-purple-300"
+                  style="border-color:var(--purple-pale); color:var(--text-dark)">
+            <option value="">— Tidak ditentukan —</option>
+            {% for p in pets %}
+            <option value="{{ p.id }}">🐱 {{ p.name }}{% if p.breed %} ({{ p.breed }}){% endif %}</option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <a href="/pets" class="flex items-center gap-2 text-xs font-semibold p-3 rounded-xl border transition-colors hover:bg-purple-50" style="color:var(--purple-mid);border-color:var(--purple-pale)">
+            ➕ Belum ada profil kucing. Tambahkan profil dulu untuk memisahkan riwayat per kucing (opsional).
+          </a>
+          {% endif %}
+        </div>
+
+        <!-- Camera Area -->
 
         <!-- Camera Area -->
         <div id="camera-box" class="hidden mb-6 animate-fade-in">
@@ -743,6 +764,11 @@
     const fd = new FormData();
     fd.append('file', selectedBlob, 'image.jpg');
 
+    const petSelect = document.getElementById('pet-select');
+    if (petSelect && petSelect.value) {
+      fd.append('pet_id', petSelect.value);
+    }
+
     try {
       const res  = await fetch('/predict', { method: 'POST', body: fd });
       if (!res.ok) throw new Error("Gagal menghubungi server AI.");
@@ -752,7 +778,7 @@
       alert("Error: " + err.message);
       resetApp();
     }
-  }
+}
 
   function renderResult(data) {
     document.getElementById('res-emoji').textContent       = data.emoji;

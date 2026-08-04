@@ -235,14 +235,13 @@
             style="color:var(--text-mid)">
             <span class="text-base">🔬</span> Analisis
           </a>
-          <a href="/history"
-            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50"
-            style="color:var(--text-mid)">
+          <a href="/history" class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50" style="color:var(--text-mid)">
             <span class="text-base">📋</span> Riwayat
           </a>
-          <a href="/chatbot"
-            class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors bg-purple-50"
-            style="color:var(--purple-mid)">
+          <a href="/pets" class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-purple-50" style="color:var(--text-mid)">
+            <span class="text-base">🐱</span> Kucing Saya
+          </a>
+          <a href="/chatbot" class="flex items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors bg-purple-50" style="color:var(--purple-mid)">
             <span class="text-base">🤖</span> <strong>Chatbot</strong>
           </a>
           <div class="border-t" style="border-color:rgba(212,168,67,0.1)"></div>
@@ -280,6 +279,23 @@
 <!-- MAIN CONTENT -->
 <main class="pb-24 px-6 -mt-6">
   <div class="max-w-7xl mx-auto">
+    {% if pets %}
+      <div class="flex items-center gap-2 flex-wrap mb-6 afu">
+        <a href="/history" class="px-4 py-2 rounded-xl text-xs font-bold transition-colors {{ 'text-white' if not selected_pet_id else 'bg-white border' }}"
+          style="{{ 'background:var(--purple-mid)' if not selected_pet_id else 'color:var(--purple-mid);border-color:rgba(212,168,67,0.2)' }}">
+          🐾 Semua Kucing
+        </a>
+        {% for p in pets %}
+        <a href="/history?pet_id={{ p.id }}" class="px-4 py-2 rounded-xl text-xs font-bold transition-colors {{ 'text-white' if selected_pet_id == p.id else 'bg-white border' }}"
+          style="{{ 'background:var(--purple-mid)' if selected_pet_id == p.id else 'color:var(--purple-mid);border-color:rgba(212,168,67,0.2)' }}">
+          {{ p.name }}
+        </a>
+        {% endfor %}
+        <a href="/pets" class="px-4 py-2 rounded-xl text-xs font-bold bg-white border hover:bg-purple-50" style="color:var(--gold);border-color:rgba(212,168,67,0.3)">
+          ⚙️ Kelola Kucing
+        </a>
+      </div>
+      {% endif %}
 
     {% if records %}
 
@@ -398,6 +414,10 @@
                 <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">
                   {{ r.confidence }}% yakin
                 </span>
+
+                {% if r.pet_name %}
+                <span class="badge-conf" style="background:var(--gold-pale);color:#8a6200">🐱 {{ r.pet_name }}</span>
+                {% endif %}
                 
                 {% if r.doctor_notes %}
                 <span class="badge-conf" style="background:var(--purple-pale);color:var(--purple-mid)">
@@ -453,26 +473,26 @@
       </div>
 
       <!-- Pagination -->
-      {% if total_pages > 1 %}
-      <div class="flex flex-wrap items-center justify-center gap-2 mt-8 afu">
-        {% if page > 1 %}
-        <a href="?page=1" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&laquo;</a>
-        <a href="?page={{ page - 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&larr; Prev</a>
-        {% else %}
-        <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">&laquo;</span>
-        <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">&larr; Prev</span>
-        {% endif %}
+        {% if total_pages > 1 %}
+        <div class="flex flex-wrap items-center justify-center gap-2 mt-8 afu">
+          {% if page > 1 %}
+          <a href="?page=1{{ '&pet_id=' ~ selected_pet_id if selected_pet_id else '' }}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&laquo;</a>
+          <a href="?page={{ page - 1 }}{{ '&pet_id=' ~ selected_pet_id if selected_pet_id else '' }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&larr; Prev</a>
+          {% else %}
+          <span class="px-3 py-2 rounded-xl text-sm font-bold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">&laquo;</span>
+          <span class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-50 border opacity-50 cursor-not-allowed" style="color:var(--text-soft); border-color:rgba(212,168,67,0.1)">&larr; Prev</span>
+          {% endif %}
 
-        <span class="px-4 py-2 text-sm font-bold rounded-xl shadow-sm" style="background:var(--purple-pale); color:var(--purple-mid)">
-          Hal {{ page }} / {{ total_pages }}
-        </span>
+          <span class="px-4 py-2 text-sm font-bold rounded-xl shadow-sm" style="background:var(--purple-pale); color:var(--purple-mid)">
+            Hal {{ page }} / {{ total_pages }}
+          </span>
 
-        {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">Next &rarr;</a>
-        <a href="?page={{ total_pages }}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&raquo;</a>
+          {% if page < total_pages %}
+          <a href="?page={{ page + 1 }}{{ '&pet_id=' ~ selected_pet_id if selected_pet_id else '' }}" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">Next &rarr;</a>
+          <a href="?page={{ total_pages }}{{ '&pet_id=' ~ selected_pet_id if selected_pet_id else '' }}" class="px-3 py-2 rounded-xl text-sm font-bold bg-white border hover:bg-purple-50 transition-colors shadow-sm" style="color:var(--purple-mid); border-color:rgba(212,168,67,0.2)">&raquo;</a>
+          {% endif %}
+        </div>
         {% endif %}
-      </div>
-      {% endif %}
     </div>
 
     <!-- Modal Detail Riwayat & Booking -->

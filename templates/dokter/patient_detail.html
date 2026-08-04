@@ -126,6 +126,9 @@
                 <div class="flex items-center gap-1.5 flex-wrap min-w-0">
                   <span class="text-base flex-shrink-0">{{ r.emoji }}</span>
                   <span class="font-bold text-sm leading-tight" style="color:var(--purple-deep)">{{ r.label }}</span>
+                  {% if r.pet_name %}
+                  <span class="text-xs font-semibold" style="color:var(--text-soft)">· {{ r.pet_name }}</span>
+                  {% endif %}
                 </div>
                 <div class="text-right flex-shrink-0 pl-2">
                   <p class="text-[11px] font-semibold whitespace-nowrap" style="color:var(--text-mid)">{{ r.created_at[:10] if r.created_at else '-' }}</p>
@@ -135,6 +138,10 @@
               
               <div class="flex items-center gap-1.5 flex-wrap mt-1">
                 <span class="badge-conf" style="background:{{ r.color }}18;color:{{ r.color }}">{{ r.confidence }}% yakin</span>
+
+                {% if r.pet_name %}
+                <span class="badge-conf" style="background:var(--gold-pale);color:#8a6200">🐱 {{ r.pet_name }}</span>
+                {% endif %}
 
                 <!-- BADGE STATUS PRESISI UNTUK DOKTER -->
                 {% if r.visit_status == 'selesai' %}

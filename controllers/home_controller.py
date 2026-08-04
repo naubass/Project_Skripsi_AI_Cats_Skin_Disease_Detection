@@ -15,7 +15,7 @@ from database import (
     get_db, get_disease_info_dict, log_activity,
     get_clinic_info, get_doctor_notes_for_predictions,
     get_booked_slots, save_user_booking, cancel_user_booking, auto_update_expired_visits,
-    save_user_booking, save_telemed_request
+    save_user_booking, save_telemed_request, get_pets_by_user
 )
 from core.state import templates
 from core.dependencies import get_current_user
@@ -29,16 +29,30 @@ async def index(request: Request):
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
-    return templates.TemplateResponse("index.html", {"request": request, "user": user})
+    pets = get_pets_by_user(user["id"])
+    return templates.TemplateResponse("index.html", {"request": request, "user": user, "pets": pets})
 
 
 @router.post("/predict")
-async def predict(request: Request, file: UploadFile = File(...)):
+async def predict(request: Request, file: UploadFile = File(...), pet_id: str = Form(None)):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Silakan login terlebih dahulu.")
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File harus berupa gambar.")
+
+    # Validasi pet_id memang milik user ini
+    valid_pet_id = None
+    if pet_id and pet_id.strip().isdigit():
+        db_check = get_db()
+        cur_check = db_check.cursor(dictionary=True)
+        try:
+            cur_check.execute("SELECT id FROM pets WHERE id = %s AND user_id = %s", (int(pet_id), user["id"]))
+            if cur_check.fetchone():
+                valid_pet_id = int(pet_id)
+        finally:
+            cur_check.close()
+            db_check.close()
 
     disease_info = get_disease_info_dict()
 
@@ -69,9 +83,9 @@ async def predict(request: Request, file: UploadFile = File(...)):
         cursor = db.cursor()
         cursor.execute(
             """INSERT INTO predictions
-            (user_id, predicted_class, label, confidence, description, image_data, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (user["id"], predicted_key, info["label"], round(confidence, 2),
+            (user_id, pet_id, predicted_class, label, confidence, description, image_data, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (user["id"], valid_pet_id, predicted_key, info["label"], round(confidence, 2),
              info["description"], image_bytes, datetime.now())
         )
         db.commit()
@@ -181,34 +195,40 @@ async def cancel_visit_appointment(request: Request, prediction_id: int):
 
 
 @router.get("/history", response_class=HTMLResponse)
-async def history_page(request: Request, page: int = 1, per_page: int = 10):
+async def history_page(request: Request, page: int = 1, per_page: int = 10, pet_id: int = None):
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
-        
     if page < 1:
         page = 1
 
-    # Otomatis update status yang sudah lewat waktu booking ke 'selesai'
     auto_update_expired_visits()
 
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
-        # Query untuk mengambil semua data kunjungan
-        cursor.execute(
-            """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at, 
-                      p.visit_confirmed, 
+        base_query = """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at, 
+                      p.visit_confirmed, p.pet_id, pets.name AS pet_name,
                       lk.status AS visit_status, lk.visit_date AS booking_datetime, lk.catatan_kunjungan,
                       ko.status AS telemed_status, ko.room_id AS telemed_room_id, ko.scheduled_at AS telemed_date
                FROM predictions p
                LEFT JOIN laporan_kunjungan lk ON lk.prediction_id = p.id
                LEFT JOIN konsultasi_online ko ON ko.prediction_id = p.id
-               WHERE p.user_id = %s 
-               ORDER BY p.created_at DESC""",
-            (user["id"],)
-        )
+               LEFT JOIN pets ON pets.id = p.pet_id
+               WHERE p.user_id = %s"""
+        params = [user["id"]]
+
+        if pet_id:
+            base_query += " AND p.pet_id = %s"
+            params.append(pet_id)
+
+        base_query += " ORDER BY p.created_at DESC"
+        cursor.execute(base_query, tuple(params))
         all_raw = cursor.fetchall()
+
+        # Ambil daftar pet untuk filter dropdown
+        cursor.execute("SELECT id, name FROM pets WHERE user_id = %s ORDER BY name", (user["id"],))
+        user_pets = cursor.fetchall()
     finally:
         cursor.close()
         db.close()

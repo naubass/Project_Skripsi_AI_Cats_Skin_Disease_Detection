@@ -177,12 +177,13 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         # Ambil data prediksi beserta info booking dari laporan_kunjungan
         cursor.execute(
             """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at,
-                      p.visit_confirmed, p.visit_confirmed_at,
+                      p.visit_confirmed, p.visit_confirmed_at, p.pet_id, pets.name AS pet_name,
                       lk.status AS visit_status, lk.visit_date AS booking_datetime, lk.catatan_kunjungan,
                       ko.status AS telemed_status, ko.room_id AS telemed_room_id, ko.scheduled_at AS telemed_date
                FROM predictions p
                LEFT JOIN laporan_kunjungan lk ON lk.prediction_id = p.id
                LEFT JOIN konsultasi_online ko ON ko.prediction_id = p.id
+               LEFT JOIN pets ON pets.id = p.pet_id
                WHERE p.user_id = %s ORDER BY p.created_at DESC""",
             (patient_id,)
         )
