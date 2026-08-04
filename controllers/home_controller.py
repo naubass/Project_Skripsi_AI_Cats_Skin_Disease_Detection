@@ -129,9 +129,9 @@ async def api_booked_slots(date: str):
 async def book_visit_appointment(
     request: Request,
     prediction_id: int,
-    visit_date: str = Form(...), # Format: YYYY-MM-DD
-    visit_time: str = Form(...),  # Format: HH:MM
-    jenis_kunjungan: str = Form("fisik") # <-- Parameter ini akan menangkap value "fisik" atau "online"
+    visit_date: str = Form(...),
+    visit_time: str = Form(...),
+    jenis_kunjungan: str = Form("fisik")
 ):
     user = get_current_user(request)
     if not user:
@@ -143,12 +143,16 @@ async def book_visit_appointment(
     except ValueError:
         raise HTTPException(status_code=400, detail="Format tanggal atau jam tidak valid.")
 
+    # Tolak kalau waktu yang dipilih sudah lewat
+    if booking_dt <= datetime.now():
+        return RedirectResponse("/history?error=Maaf, jam yang dipilih sudah lewat. Silakan pilih jadwal lain.", status_code=302)
+
     # Cek ketersediaan slot jam
     existing_slots = get_booked_slots(visit_date.strip())
     if visit_time.strip() in existing_slots:
         return RedirectResponse("/history?error=Maaf, jam tersebut baru saja di-booking orang lain.", status_code=302)
 
-    # ─── MODIFIKASI LOGIKA PENYIMPANAN DI SINI ───
+    # Pilih tipe kunjungan
     if jenis_kunjungan == "online":
         # Simpan ke tabel konsultasi_online
         save_telemed_request(prediction_id, user["id"], booking_dt)
@@ -253,6 +257,11 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10):
         # Format tanggal & jam booking konsultasi online jika ada
         if row.get("telemed_date"):
             row["telemed_date_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
+            # PENTING: kirim juga sebagai scheduled_at (nama field yang dipakai template/JS)
+            row["scheduled_at"] = row["telemed_date"]
+            row["booking_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
+        else:
+            row["scheduled_at"] = None
 
         records.append(row)
 

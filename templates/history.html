@@ -416,7 +416,7 @@
                 </span>
                 {% elif r.visit_status == 'selesai' or r.telemed_status == 'selesai' %}
                 <span class="badge-conf" style="background:#e6f7ec;color:#1f9254">
-                  ✅ Sudah Kunjungan
+                  ✅ Sudah Konsultasi
                 </span>
                 {% elif r.visit_status == 'terjadwal' %}
                 <span class="badge-conf" style="background:#fef3c7;color:#b45309">
@@ -743,7 +743,8 @@ function openDetailModal(id) {
       modalAlert.style.border = '1px solid #f5e3a3';
   }
 
-  const isSelesai = rec.visit_status === 'selesai' || rec.telemed_status === 'selesai';
+  // Selesai hanya jika benar-benar kunjungan fisik yang selesai
+  const isSelesai = rec.visit_status === 'selesai' && rec.telemed_status !== 'selesai';
 
   if (isSelesai) {
     modalAlert.classList.add('hidden');
@@ -760,10 +761,35 @@ function openDetailModal(id) {
     telemedApprovedBox.classList.add('hidden');
     telemedWaitingBox.classList.add('hidden');
 
-    if (rec.telemed_status === 'disetujui' && rec.telemed_room_id) {
-        // Tampilkan tombol join Telemedicine
+    // Jika telemed sudah selesai (baru di-end), jangan tampilkan tombol join lagi, tapi tampilkan form booking normal
+    if (rec.telemed_status === 'disetujui' && rec.telemed_room_id && rec.telemed_status !== 'selesai') {
+        // Tampilkan kotak telemed disetujui
         telemedApprovedBox.classList.remove('hidden');
-        telemedJoinBtn.href = '/telemed/' + rec.telemed_room_id;
+
+        // 1. Ambil dan perbaiki format tanggal agar terbaca valid di JavaScript (ubah spasi jadi 'T')
+        let scheduleStr = rec.scheduled_at || "";
+        if (!scheduleStr && rec.booking_date) {
+            scheduleStr = rec.booking_date + "T" + (rec.booking_time || "00:00:00");
+        } else {
+            scheduleStr = scheduleStr.replace(" ", "T"); // "2026-08-04 10:00:00" -> "2026-08-04T10:00:00"
+        }
+
+        const scheduledTime = new Date(scheduleStr);
+        const now = new Date();
+
+        // 2. Cek apakah tanggal valid (!isNaN) DAN apakah waktu sekarang masih sebelum jadwal
+        if (!isNaN(scheduledTime) && now < scheduledTime) {
+            // Waktu belum tiba -> Tombol dikunci (abu-abu, mati)
+            telemedJoinBtn.className = "block w-full py-2.5 text-center text-sm font-bold text-gray-500 bg-gray-200 rounded-lg shadow-sm cursor-not-allowed pointer-events-none";
+            telemedJoinBtn.innerHTML = `⏳ Belum Waktunya (Dibuka ${rec.booking_formatted || scheduledTime.toLocaleString('id-ID')})`;
+            telemedJoinBtn.removeAttribute('href');
+        } else {
+            // Waktu sudah tiba/lewat -> Tombol aktif normal (biru)
+            telemedJoinBtn.className = "block w-full py-2.5 text-center text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors";
+            telemedJoinBtn.innerHTML = `📹 Masuk Ruang Video Call`;
+            telemedJoinBtn.href = '/telemed/' + rec.telemed_room_id;
+        }
+
     } else if (rec.telemed_status === 'menunggu') {
         // Tampilkan info menunggu konfirmasi Telemedicine
         telemedWaitingBox.classList.remove('hidden');
@@ -774,7 +800,7 @@ function openDetailModal(id) {
         cancelForm.action = '/predictions/' + id + '/cancel-booking';
         cancelForm.classList.remove('hidden'); 
     } else {
-        // Tampilkan Form Booking Kunjungan/Online
+        // Tampilkan Form Booking Kunjungan/Online kembali (karena call sudah di-end atau belum booking)
         bookingForm.action = '/predictions/' + id + '/book';
         bookingForm.classList.remove('hidden');
         
@@ -785,9 +811,11 @@ function openDetailModal(id) {
 
         const today = new Date().toISOString().split('T')[0];
         const dateInput = document.getElementById('booking-date');
-        dateInput.min = today;
-        dateInput.value = today;
-        setTimeout(fetchBookedSlots, 50);
+        if (dateInput) {
+            dateInput.min = today;
+            dateInput.value = today;
+            setTimeout(fetchBookedSlots, 50);
+        }
     }
   }
 
@@ -828,22 +856,39 @@ async function fetchBookedSlots() {
   });
   document.getElementById('selected-time-input').value = '';
 
+  // 2. Cek apakah tanggal yang dipilih adalah HARI INI
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const isToday = dateVal === todayStr;
+
+  if (isToday) {
+    // Kalau hari ini, disable slot yang jamnya sudah lewat
+    document.querySelectorAll('.time-slot-btn').forEach(btn => {
+      const timeVal = btn.textContent.trim(); // "09:00", "14:00", dst
+      const [h, m] = timeVal.split(':').map(Number);
+      const slotTime = new Date();
+      slotTime.setHours(h, m, 0, 0);
+
+      if (slotTime <= now) {
+        btn.disabled = true;
+        btn.style.pointerEvents = 'none';
+      }
+    });
+  }
+
   try {
-    // 2. Fetch slot jam terpakai dari backend
+    // 3. Fetch slot jam terpakai dari backend (booking orang lain)
     const res = await fetch('/api/booked-slots?date=' + encodeURIComponent(dateVal));
     const data = await res.json();
     const booked = data.booked_slots || [];
 
-    // 3. Cocokkan dan matikan tombol yang jamnya sudah terisi
     document.querySelectorAll('.time-slot-btn').forEach(btn => {
-      const timeVal = btn.textContent.trim(); // contoh: "10:00" atau "20:00"
-      
-      // Pencocokan presisi string jam
+      const timeVal = btn.textContent.trim();
       const isBooked = booked.some(slot => slot.substring(0, 5) === timeVal);
       
       if (isBooked) {
         btn.disabled = true;
-        btn.style.pointerEvents = 'none'; // Kunci klik dari CSS
+        btn.style.pointerEvents = 'none';
       }
     });
   } catch (e) {
@@ -877,6 +922,7 @@ const RECORD_DETAILS = {
     booking_formatted: {{ (r.booking_formatted if r.booking_formatted else '')|tojson }},
     telemed_status: {{ (r.telemed_status or '')|tojson }},
     telemed_room_id: {{ (r.telemed_room_id or '')|tojson }},
+    scheduled_at: {{ (r.scheduled_at.strftime('%Y-%m-%d %H:%M:%S') if r.scheduled_at else '')|tojson }},
     notes: [
       {% for n in r.doctor_notes %}
       {
