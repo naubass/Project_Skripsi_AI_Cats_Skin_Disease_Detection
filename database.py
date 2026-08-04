@@ -317,6 +317,63 @@ def init_db():
         """)
         conn.commit()
 
+        # ── 7. Tabel pets ──
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pets (
+                id           INT AUTO_INCREMENT PRIMARY KEY,
+                user_id      INT          NOT NULL,
+                name         VARCHAR(100) NOT NULL,
+                breed        VARCHAR(100) NULL,
+                gender       ENUM('jantan','betina') NULL,
+                age_years    INT          NULL,
+                age_months   INT          NULL,
+                photo_data   LONGBLOB     NULL,
+                notes        TEXT         NULL,
+                created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        conn.commit()
+
+        # ── Migrasi: tambah pet_id ke predictions ──
+        try:
+            cursor.execute("ALTER TABLE predictions ADD COLUMN pet_id INT NULL AFTER user_id")
+            conn.commit()
+            print("[DB] Migrasi kolom pet_id pada predictions selesai.")
+        except Error as e:
+            print(f"[DB] Migrasi pet_id dilewati/sudah ada ({e}).")
+
+        try:
+            cursor.execute("""
+                ALTER TABLE predictions 
+                ADD CONSTRAINT fk_predictions_pet 
+                FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE SET NULL
+            """)
+            conn.commit()
+        except Error:
+            pass
+
+        # ── Backfill: bikinkan pet default untuk riwayat lama yang belum punya pet_id ──
+        try:
+            cursor.execute("SELECT DISTINCT user_id FROM predictions WHERE pet_id IS NULL")
+            orphan_users = cursor.fetchall()
+            for row in orphan_users:
+                uid = row[0]
+                cursor.execute(
+                    "INSERT INTO pets (user_id, name, created_at) VALUES (%s, %s, NOW())",
+                    (uid, "Kucing Saya")
+                )
+                new_pet_id = cursor.lastrowid
+                cursor.execute(
+                    "UPDATE predictions SET pet_id = %s WHERE user_id = %s AND pet_id IS NULL",
+                    (new_pet_id, uid)
+                )
+            conn.commit()
+            if orphan_users:
+                print(f"[DB] Backfill pet_id untuk {len(orphan_users)} user selesai.")
+        except Error as e:
+            print(f"[DB] Backfill pet_id gagal/dilewati: {e}")
+
         # ── Seed data default ──
         cursor.execute("SELECT COUNT(*) FROM disease_info")
         if cursor.fetchone()[0] == 0:
@@ -729,6 +786,104 @@ def cancel_telemed_request(prediction_id: int, user_id: int):
             (prediction_id, user_id)
         )
         db.commit()
+    finally:
+        cursor.close()
+        db.close()
+
+# ── Helper: Pets ──────────────────────────────────────────────────────────────
+
+def create_pet(user_id: int, name: str, breed: str = None, gender: str = None,
+                age_years: int = None, age_months: int = None,
+                photo_bytes: bytes = None, notes: str = None) -> int:
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            """INSERT INTO pets (user_id, name, breed, gender, age_years, age_months, photo_data, notes, created_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())""",
+            (user_id, name.strip(), breed, gender, age_years, age_months, photo_bytes, notes)
+        )
+        db.commit()
+        return cursor.lastrowid
+    finally:
+        cursor.close()
+        db.close()
+
+
+def get_pets_by_user(user_id: int) -> list:
+    """Ambil semua pet milik user, beserta jumlah riwayat prediksi tiap pet."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """SELECT p.*, COUNT(pr.id) AS total_predictions
+               FROM pets p
+               LEFT JOIN predictions pr ON pr.pet_id = p.id
+               WHERE p.user_id = %s
+               GROUP BY p.id
+               ORDER BY p.created_at ASC""",
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        for row in rows:
+            if row.get("created_at") and isinstance(row["created_at"], datetime):
+                row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
+            # photo_data (LONGBLOB) juga tidak bisa di-tojson, buang dari dict yang dikirim ke JS
+            row.pop("photo_data", None)
+        return rows
+    finally:
+        cursor.close()
+        db.close()
+
+
+def get_pet_by_id(pet_id: int, user_id: int = None) -> dict:
+    """Ambil satu pet. Kalau user_id diisi, pastikan pet itu memang milik user tsb."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        if user_id is not None:
+            cursor.execute("SELECT * FROM pets WHERE id = %s AND user_id = %s", (pet_id, user_id))
+        else:
+            cursor.execute("SELECT * FROM pets WHERE id = %s", (pet_id,))
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        db.close()
+
+
+def update_pet(pet_id: int, user_id: int, name: str, breed: str = None, gender: str = None,
+                age_years: int = None, age_months: int = None,
+                photo_bytes: bytes = None, notes: str = None) -> bool:
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        if photo_bytes is not None:
+            cursor.execute(
+                """UPDATE pets SET name=%s, breed=%s, gender=%s, age_years=%s, age_months=%s,
+                   photo_data=%s, notes=%s WHERE id=%s AND user_id=%s""",
+                (name.strip(), breed, gender, age_years, age_months, photo_bytes, notes, pet_id, user_id)
+            )
+        else:
+            cursor.execute(
+                """UPDATE pets SET name=%s, breed=%s, gender=%s, age_years=%s, age_months=%s,
+                   notes=%s WHERE id=%s AND user_id=%s""",
+                (name.strip(), breed, gender, age_years, age_months, notes, pet_id, user_id)
+            )
+        db.commit()
+        return cursor.rowcount > 0
+    finally:
+        cursor.close()
+        db.close()
+
+
+def delete_pet(pet_id: int, user_id: int) -> bool:
+    """Hapus pet. Riwayat prediksi terkait TIDAK ikut terhapus (pet_id di predictions jadi NULL, karena ON DELETE SET NULL)."""
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("DELETE FROM pets WHERE id = %s AND user_id = %s", (pet_id, user_id))
+        db.commit()
+        return cursor.rowcount > 0
     finally:
         cursor.close()
         db.close()

@@ -21,7 +21,8 @@ from controllers import (
     dokter_controller,
     chatbot_controller,
     laporan_controller,
-    telemed_controller
+    telemed_controller,
+    pets_controller
 )
 
 app = FastAPI(title="Sakti Pet Care - CatSkin AI | Klasifikasi Penyakit Kulit Kucing")
@@ -37,6 +38,7 @@ app.include_router(dokter_controller.router)
 app.include_router(chatbot_controller.router)
 app.include_router(laporan_controller.router)
 app.include_router(telemed_controller.router)
+app.include_router(pets_controller.router)
 
 @app.on_event("startup")
 async def startup():
