@@ -269,24 +269,32 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10, pet_
         row["color"] = info.get("color", "#888")
         row["advice"] = info.get("advice", [])
         
-        # Format tanggal & jam booking fisik jika ada
+        # 1. Format tanggal & jam booking fisik jika ada (Sebagai Default)
         if row.get("booking_datetime"):
             row["booking_date"] = row["booking_datetime"].strftime("%Y-%m-%d")
             row["booking_time"] = row["booking_datetime"].strftime("%H:%M")
             row["booking_formatted"] = row["booking_datetime"].strftime("%d %b %Y, %H:%M WIB")
+            row["scheduled_at"] = row["booking_datetime"]
         else:
             row["booking_date"] = ""
             row["booking_time"] = ""
             row["booking_formatted"] = ""
-
-        # Format tanggal & jam booking konsultasi online jika ada
-        if row.get("telemed_date"):
-            row["telemed_date_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
-            # PENTING: kirim juga sebagai scheduled_at (nama field yang dipakai template/JS)
-            row["scheduled_at"] = row["telemed_date"]
-            row["booking_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
-        else:
             row["scheduled_at"] = None
+
+        # 2. Cek status untuk memprioritaskan jadwal mana yang tampil di Front-end
+        t_status = row.get("telemed_status")
+        v_status = row.get("visit_status")
+
+        # Format tanggal telemed HANYA JIKA telemed masih aktif atau tidak ada jadwal fisik
+        if row.get("telemed_date") and t_status not in [None, "batal"]:
+            # MENCEGAH OVERWRITE: Jika telemed sudah 'selesai', tapi pasien punya kunjungan fisik 'terjadwal',
+            # maka JANGAN ditimpa! Biarkan tanggal kunjungan fisik (05 Agustus) yang tampil.
+            if t_status == "selesai" and v_status == "terjadwal":
+                pass 
+            else:
+                row["telemed_date_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
+                row["scheduled_at"] = row["telemed_date"]
+                row["booking_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
 
         records.append(row)
 
