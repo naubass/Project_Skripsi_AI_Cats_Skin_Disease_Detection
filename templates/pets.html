@@ -260,7 +260,7 @@
     <div class="flex items-center justify-between mb-6 afu">
       <div>
         <span class="eyebrow">🐾 Daftar Kucing</span>
-        <p class="serif text-2xl font-bold mt-2" style="color:var(--purple-deep)">{{ pets|length }} Profil Terdaftar</p>
+        <p class="serif text-2xl font-bold mt-2" style="color:var(--purple-deep)">{{ pets|length }} / {{ max_pets }} Profil Terdaftar</p>
         <div class="gold-divider"></div>
       </div>
     </div>
@@ -323,11 +323,19 @@
       {% endfor %}
 
       <!-- Add Pet Card -->
+      {% if pets|length < max_pets %}
       <div class="add-pet-card flex flex-col items-center justify-center text-center p-8" onclick="openAddModal()">
         <div class="text-5xl mb-4">➕</div>
         <p class="font-bold" style="color:var(--purple-mid)">Tambah Profil Kucing</p>
         <p class="text-xs mt-1 max-w-[180px]" style="color:var(--text-soft)">Pisahkan riwayat diagnosis untuk setiap kucing peliharaan Anda</p>
       </div>
+      {% else %}
+      <div class="add-pet-card flex flex-col items-center justify-center text-center p-8 opacity-60 cursor-not-allowed" style="cursor:not-allowed">
+        <div class="text-5xl mb-4">🔒</div>
+        <p class="font-bold" style="color:var(--text-soft)">Batas Maksimal Tercapai</p>
+        <p class="text-xs mt-1 max-w-[200px]" style="color:var(--text-soft)">Anda sudah mencapai {{ max_pets }} profil kucing. Hapus salah satu untuk menambah yang baru.</p>
+      </div>
+      {% endif %}
 
     </div>
 

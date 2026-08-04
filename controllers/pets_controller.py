@@ -13,7 +13,7 @@ from database import (
 )
 
 router = APIRouter(tags=["pets"])
-
+MAX_PETS_PER_USER = 10
 
 @router.get("/pets", response_class=HTMLResponse)
 async def pets_page(request: Request):
@@ -23,7 +23,8 @@ async def pets_page(request: Request):
 
     pets = get_pets_by_user(user["id"])
     return templates.TemplateResponse("pets.html", {
-        "request": request, "user": user, "pets": pets
+        "request": request, "user": user, "pets": pets,
+        "max_pets": MAX_PETS_PER_USER
     })
 
 
@@ -41,6 +42,14 @@ async def pets_create(
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+
+    # Cek batas maksimal profil kucing
+    existing_pets = get_pets_by_user(user["id"])
+    if len(existing_pets) >= MAX_PETS_PER_USER:
+        return RedirectResponse(
+            f"/pets?error=Maksimal {MAX_PETS_PER_USER} profil kucing per akun. Hapus salah satu profil dulu untuk menambah yang baru.",
+            status_code=302
+        )
 
     photo_bytes = await photo.read() if photo and photo.filename else None
 
