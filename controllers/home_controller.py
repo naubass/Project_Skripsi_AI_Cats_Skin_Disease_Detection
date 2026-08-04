@@ -34,25 +34,30 @@ async def index(request: Request):
 
 
 @router.post("/predict")
-async def predict(request: Request, file: UploadFile = File(...), pet_id: str = Form(None)):
+async def predict(request: Request, file: UploadFile = File(...), pet_id: str = Form(...)):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Silakan login terlebih dahulu.")
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File harus berupa gambar.")
 
+    if not pet_id or not pet_id.strip().isdigit():
+        raise HTTPException(status_code=400, detail="Silakan pilih kucing yang diperiksa terlebih dahulu.")
+
     # Validasi pet_id memang milik user ini
-    valid_pet_id = None
-    if pet_id and pet_id.strip().isdigit():
-        db_check = get_db()
-        cur_check = db_check.cursor(dictionary=True)
-        try:
-            cur_check.execute("SELECT id FROM pets WHERE id = %s AND user_id = %s", (int(pet_id), user["id"]))
-            if cur_check.fetchone():
-                valid_pet_id = int(pet_id)
-        finally:
-            cur_check.close()
-            db_check.close()
+    db_check = get_db()
+    cur_check = db_check.cursor(dictionary=True)
+    try:
+        cur_check.execute("SELECT id FROM pets WHERE id = %s AND user_id = %s", (int(pet_id), user["id"]))
+        valid_pet = cur_check.fetchone()
+    finally:
+        cur_check.close()
+        db_check.close()
+
+    if not valid_pet:
+        raise HTTPException(status_code=400, detail="Profil kucing tidak valid atau bukan milik Anda.")
+
+    valid_pet_id = int(pet_id)
 
     disease_info = get_disease_info_dict()
 

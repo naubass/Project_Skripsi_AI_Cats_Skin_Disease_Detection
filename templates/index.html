@@ -435,6 +435,7 @@
     <div class="grid lg:grid-cols-2 gap-8 items-start">
       <!-- ── Input Panel ── -->
       <div class="card-main p-8">
+        {% if pets and pets|length > 0 %}
         <div class="flex items-center gap-3 mb-6">
           <div class="step-num">1</div>
           <div>
@@ -445,23 +446,15 @@
 
         <!-- Pilih Kucing -->
         <div class="mb-6">
-          <label class="text-[11px] font-bold block mb-1.5" style="color:var(--text-soft)">Kucing yang diperiksa (opsional)</label>
-          {% if pets and pets|length > 0 %}
-          <select id="pet-select" class="w-full text-sm p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-purple-300"
+          <label class="text-[11px] font-bold block mb-1.5" style="color:var(--text-soft)">Kucing yang diperiksa *</label>
+          <select id="pet-select" required class="w-full text-sm p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-purple-300"
                   style="border-color:var(--purple-pale); color:var(--text-dark)">
-            <option value="">— Tidak ditentukan —</option>
+            <option value="" disabled selected>— Pilih kucing —</option>
             {% for p in pets %}
             <option value="{{ p.id }}">🐱 {{ p.name }}{% if p.breed %} ({{ p.breed }}){% endif %}</option>
             {% endfor %}
           </select>
-          {% else %}
-          <a href="/pets" class="flex items-center gap-2 text-xs font-semibold p-3 rounded-xl border transition-colors hover:bg-purple-50" style="color:var(--purple-mid);border-color:var(--purple-pale)">
-            ➕ Belum ada profil kucing. Tambahkan profil dulu untuk memisahkan riwayat per kucing (opsional).
-          </a>
-          {% endif %}
         </div>
-
-        <!-- Camera Area -->
 
         <!-- Camera Area -->
         <div id="camera-box" class="hidden mb-6 animate-fade-in">
@@ -496,6 +489,19 @@
             Analisis Sekarang
           </button>
         </div>
+        {% else %}
+        <!-- Belum ada profil kucing — kunci fitur analisis -->
+        <div class="flex flex-col items-center justify-center text-center py-16">
+          <div class="w-24 h-24 rounded-full flex items-center justify-center text-5xl mb-6" style="background:var(--purple-pale)">🔒</div>
+          <h3 class="text-xl font-bold mb-2" style="color:var(--purple-deep)">Buat Profil Kucing Dulu</h3>
+          <p class="text-sm mb-8 max-w-xs mx-auto leading-relaxed" style="color:var(--text-soft)">
+            Untuk mulai menggunakan alat diagnosis AI, Anda perlu menambahkan minimal satu profil kucing terlebih dahulu. Ini membantu memisahkan riwayat diagnosis per kucing.
+          </p>
+          <a href="/pets" class="btn-gold px-8 py-3.5 rounded-2xl text-sm inline-flex items-center gap-2">
+            🐱 Buat Profil Kucing Sekarang
+          </a>
+        </div>
+        {% endif %}
       </div>
 
       <!-- ── Result Panel ── -->
@@ -756,6 +762,12 @@
   async function processAnalysis() {
     if (!selectedBlob) return;
 
+    const petSelect = document.getElementById('pet-select');
+    if (!petSelect || !petSelect.value) {
+      alert("Silakan pilih kucing yang diperiksa terlebih dahulu.");
+      return;
+    }
+
     document.getElementById('empty-state').classList.add('hidden');
     document.getElementById('result-content').classList.add('hidden');
     document.getElementById('loading-state').classList.remove('hidden');
@@ -763,11 +775,7 @@
 
     const fd = new FormData();
     fd.append('file', selectedBlob, 'image.jpg');
-
-    const petSelect = document.getElementById('pet-select');
-    if (petSelect && petSelect.value) {
-      fd.append('pet_id', petSelect.value);
-    }
+    fd.append('pet_id', petSelect.value);
 
     try {
       const res  = await fetch('/predict', { method: 'POST', body: fd });
@@ -778,7 +786,7 @@
       alert("Error: " + err.message);
       resetApp();
     }
-}
+  }
 
   function renderResult(data) {
     document.getElementById('res-emoji').textContent       = data.emoji;
