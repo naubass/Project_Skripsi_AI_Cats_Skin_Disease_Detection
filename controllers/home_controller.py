@@ -296,5 +296,7 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10, pet_
         "records": records, 
         "all_records": all_records,
         "clinic": get_clinic_info(),
+        "pets": user_pets,
+        "selected_pet_id": pet_id,
         "page": page, "total_pages": total_pages, "total_data": total_data
     })

@@ -156,7 +156,7 @@ async def dokter_patients_page(request: Request, page: int = 1, per_page: int = 
 
 
 @router.get("/dokter/patients/{patient_id}", response_class=HTMLResponse)
-async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1, per_page: int = 10):
+async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1, per_page: int = 10, pet_id: int = None):
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -175,8 +175,7 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
             patient["created_at"] = patient["created_at"].strftime("%d %b %Y")
 
         # Ambil data prediksi beserta info booking dari laporan_kunjungan
-        cursor.execute(
-            """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at,
+        base_query = """SELECT p.id, p.predicted_class, p.label, p.confidence, p.description, p.created_at,
                       p.visit_confirmed, p.visit_confirmed_at, p.pet_id, pets.name AS pet_name,
                       lk.status AS visit_status, lk.visit_date AS booking_datetime, lk.catatan_kunjungan,
                       ko.status AS telemed_status, ko.room_id AS telemed_room_id, ko.scheduled_at AS telemed_date
@@ -184,10 +183,20 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
                LEFT JOIN laporan_kunjungan lk ON lk.prediction_id = p.id
                LEFT JOIN konsultasi_online ko ON ko.prediction_id = p.id
                LEFT JOIN pets ON pets.id = p.pet_id
-               WHERE p.user_id = %s ORDER BY p.created_at DESC""",
-            (patient_id,)
-        )
+               WHERE p.user_id = %s"""
+        params = [patient_id]
+
+        if pet_id:
+            base_query += " AND p.pet_id = %s"
+            params.append(pet_id)
+
+        base_query += " ORDER BY p.created_at DESC"
+        cursor.execute(base_query, tuple(params))
         all_raw = cursor.fetchall()
+
+        # Ambil daftar kucing milik pasien ini untuk filter dropdown
+        cursor.execute("SELECT id, name FROM pets WHERE user_id = %s ORDER BY name", (patient_id,))
+        patient_pets = cursor.fetchall()
     finally:
         cursor.close()
         db.close()
@@ -206,18 +215,14 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         row["color"] = info.get("color", "#888")
         row["visit_confirmed"] = bool(row.get("visit_confirmed"))
 
-        # Konversi SEMUA tipe datetime ke string agar aman untuk JSON
         if row.get("created_at") and isinstance(row["created_at"], datetime):
             row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
         if row.get("visit_confirmed_at") and isinstance(row["visit_confirmed_at"], datetime):
             row["visit_confirmed_at"] = row["visit_confirmed_at"].strftime("%d %b %Y, %H:%M")
         if row.get("booking_datetime") and isinstance(row["booking_datetime"], datetime):
             row["booking_datetime"] = row["booking_datetime"].strftime("%Y-%m-%d %H:%M")
-            
-        # 🔻 TAMBAHKAN KODE INI 🔻
         if row.get("telemed_date") and isinstance(row["telemed_date"], datetime):
             row["telemed_date"] = row["telemed_date"].strftime("%Y-%m-%d %H:%M")
-        # 🔺 BATAS KODE TAMBAHAN 🔺
 
         all_records.append(row)
 
@@ -234,7 +239,6 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         row["advice"] = info.get("advice", [])
         row["visit_confirmed"] = bool(row.get("visit_confirmed"))
         
-        # Konversi objek datetime untuk tampilan tabel
         if row.get("booking_datetime") and isinstance(row["booking_datetime"], datetime):
             b_dt = row["booking_datetime"]
             row["booking_date_formatted"] = b_dt.strftime("%d %b %Y")
@@ -252,15 +256,12 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
         if row.get("created_at") and isinstance(row["created_at"], datetime):
             row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
             
-        # 🔻 TAMBAHKAN KODE INI 🔻
         if row.get("telemed_date") and isinstance(row["telemed_date"], datetime):
             row["telemed_time_reached"] = datetime.now() >= row["telemed_date"]
             row["telemed_date_formatted"] = row["telemed_date"].strftime("%d %b %Y, %H:%M WIB")
-            # Ubah objek aslinya jadi string juga untuk menghindari error JSON
             row["telemed_date"] = row["telemed_date"].strftime("%Y-%m-%d %H:%M")
         else:
             row["telemed_time_reached"] = False
-        # 🔺 BATAS KODE TAMBAHAN 🔺
             
         records.append(row)
 
@@ -275,6 +276,7 @@ async def dokter_patient_detail(request: Request, patient_id: int, page: int = 1
     return templates.TemplateResponse("dokter/patient_detail.html", {
         "request": request, "user": user, "patient": patient,
         "records": records, "all_records": all_records, 
+        "pets": patient_pets, "selected_pet_id": pet_id,
         "active_page": "patients",
         "page": page, "total_pages": total_pages, "total_data": total_data
     })

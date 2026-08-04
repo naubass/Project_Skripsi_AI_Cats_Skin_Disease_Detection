@@ -280,18 +280,45 @@
 <main class="pb-24 px-6 -mt-6">
   <div class="max-w-7xl mx-auto">
     {% if pets %}
-      <div class="flex items-center gap-2 flex-wrap mb-6 afu">
-        <a href="/history" class="px-4 py-2 rounded-xl text-xs font-bold transition-colors {{ 'text-white' if not selected_pet_id else 'bg-white border' }}"
-          style="{{ 'background:var(--purple-mid)' if not selected_pet_id else 'color:var(--purple-mid);border-color:rgba(212,168,67,0.2)' }}">
-          🐾 Semua Kucing
-        </a>
-        {% for p in pets %}
-        <a href="/history?pet_id={{ p.id }}" class="px-4 py-2 rounded-xl text-xs font-bold transition-colors {{ 'text-white' if selected_pet_id == p.id else 'bg-white border' }}"
-          style="{{ 'background:var(--purple-mid)' if selected_pet_id == p.id else 'color:var(--purple-mid);border-color:rgba(212,168,67,0.2)' }}">
-          {{ p.name }}
-        </a>
-        {% endfor %}
-        <a href="/pets" class="px-4 py-2 rounded-xl text-xs font-bold bg-white border hover:bg-purple-50" style="color:var(--gold);border-color:rgba(212,168,67,0.3)">
+      <div class="flex items-center gap-3 flex-wrap mb-6 afu relative z-20">
+        <div class="relative z-20" id="pet-dropdown-wrapper">
+          <button type="button" onclick="togglePetDropdown()" id="pet-dropdown-btn"
+            class="flex items-center gap-2 pl-4 pr-3 py-2.5 rounded-xl text-sm font-bold border transition-colors focus:outline-none"
+            style="background:{{ 'var(--purple-mid)' if selected_pet_id else '#fff' }};color:{{ '#fff' if selected_pet_id else 'var(--purple-mid)' }};border-color:{{ 'var(--purple-mid)' if selected_pet_id else 'rgba(212,168,67,0.2)' }}">
+            <span id="pet-dropdown-label">
+              {% if selected_pet_id %}
+                {% for p in pets %}{% if p.id == selected_pet_id %}🐱 {{ p.name }}{% endif %}{% endfor %}
+              {% else %}
+                🐾 Semua Kucing
+              {% endif %}
+            </span>
+            <svg id="pet-dropdown-chevron" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+
+          <div id="pet-dropdown-menu"
+            class="hidden absolute left-0 mt-2 w-52 rounded-2xl shadow-xl border overflow-hidden z-[100]"
+            style="background:#fff;border-color:rgba(212,168,67,0.2);box-shadow:0 16px 40px rgba(45,27,105,0.15)">
+            <a href="/history"
+              class="flex items-center gap-2.5 px-4 py-3 text-sm font-semibold transition-colors {{ 'bg-purple-50' if not selected_pet_id else 'hover:bg-purple-50' }}"
+              style="color:{{ 'var(--purple-mid)' if not selected_pet_id else 'var(--text-mid)' }}">
+              🐾 Semua Kucing
+              {% if not selected_pet_id %}<span class="ml-auto text-xs">✓</span>{% endif %}
+            </a>
+            <div class="border-t" style="border-color:rgba(212,168,67,0.1)"></div>
+            {% for p in pets %}
+            <a href="/history?pet_id={{ p.id }}"
+              class="flex items-center gap-2.5 px-4 py-3 text-sm font-semibold transition-colors {{ 'bg-purple-50' if selected_pet_id == p.id else 'hover:bg-purple-50' }}"
+              style="color:{{ 'var(--purple-mid)' if selected_pet_id == p.id else 'var(--text-mid)' }}">
+              🐱 {{ p.name }}
+              {% if selected_pet_id == p.id %}<span class="ml-auto text-xs">✓</span>{% endif %}
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+
+        <a href="/pets" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-white border hover:bg-purple-50 transition-colors" style="color:var(--gold);border-color:rgba(212,168,67,0.3)">
           ⚙️ Kelola Kucing
         </a>
       </div>
@@ -681,6 +708,24 @@ document.addEventListener('click', e => {
   if (w && !w.contains(e.target)) {
     const menu = document.getElementById('nav-dropdown-menu');
     const chevron = document.getElementById('nav-chevron');
+    if (menu) menu.classList.add('hidden');
+    if (chevron) chevron.style.transform = '';
+  }
+});
+
+function togglePetDropdown() {
+  const menu = document.getElementById('pet-dropdown-menu');
+  const chevron = document.getElementById('pet-dropdown-chevron');
+  const hidden = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !hidden);
+  if (chevron) chevron.style.transform = hidden ? 'rotate(180deg)' : '';
+}
+
+document.addEventListener('click', e => {
+  const w = document.getElementById('pet-dropdown-wrapper');
+  if (w && !w.contains(e.target)) {
+    const menu = document.getElementById('pet-dropdown-menu');
+    const chevron = document.getElementById('pet-dropdown-chevron');
     if (menu) menu.classList.add('hidden');
     if (chevron) chevron.style.transform = '';
   }
