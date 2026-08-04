@@ -268,6 +268,7 @@ async def history_page(request: Request, page: int = 1, per_page: int = 10, pet_
         row["emoji"] = info.get("emoji", "❓")
         row["color"] = info.get("color", "#888")
         row["advice"] = info.get("advice", [])
+        row["visit_confirmed"] = bool(row.get("visit_confirmed"))
         
         # 1. Format tanggal & jam booking fisik jika ada (Sebagai Default)
         if row.get("booking_datetime"):
