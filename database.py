@@ -316,6 +316,19 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         conn.commit()
+        try:
+            cursor.execute("ALTER TABLE konsultasi_online ADD COLUMN reminder_sent TINYINT(1) NOT NULL DEFAULT 0")
+            conn.commit()
+            print("[DB] Migrasi kolom reminder_sent pada konsultasi_online selesai.")
+        except Error:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE laporan_kunjungan ADD COLUMN reminder_sent TINYINT(1) NOT NULL DEFAULT 0")
+            conn.commit()
+            print("[DB] Migrasi kolom reminder_sent pada laporan_kunjungan selesai.")
+        except Error:
+            pass
 
         # ── 7. Tabel pets ──
         cursor.execute("""
@@ -790,6 +803,27 @@ def cancel_telemed_request(prediction_id: int, user_id: int):
         cursor.close()
         db.close()
 
+def get_telemed_info(prediction_id: int) -> dict:
+    """Ambil data konsultasi online + user + dokter + prediksi, buat kirim email."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT ko.room_id, ko.scheduled_at,
+                   u.name AS user_name, u.email AS user_email,
+                   d.name AS doctor_name,
+                   p.label AS prediction_label
+            FROM konsultasi_online ko
+            JOIN users u ON ko.user_id = u.id
+            LEFT JOIN users d ON ko.doctor_id = d.id
+            JOIN predictions p ON ko.prediction_id = p.id
+            WHERE ko.prediction_id = %s
+        """, (prediction_id,))
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+
 # ── Helper: Pets ──────────────────────────────────────────────────────────────
 
 def create_pet(user_id: int, name: str, breed: str = None, gender: str = None,
@@ -884,6 +918,78 @@ def delete_pet(pet_id: int, user_id: int) -> bool:
         cursor.execute("DELETE FROM pets WHERE id = %s AND user_id = %s", (pet_id, user_id))
         db.commit()
         return cursor.rowcount > 0
+    finally:
+        cursor.close()
+        db.close()
+
+# ── Helper: Reminder Email ──────────────────────────────────────────────────
+
+def get_upcoming_telemed_reminders():
+    """Ambil konsultasi online yang scheduled_at-nya 25-35 menit dari sekarang, sudah disetujui, dan belum dikirim reminder."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT ko.id, ko.room_id, ko.scheduled_at,
+                   u.name AS user_name, u.email AS user_email,
+                   d.name AS doctor_name,
+                   p.label AS prediction_label
+            FROM konsultasi_online ko
+            JOIN users u ON ko.user_id = u.id
+            LEFT JOIN users d ON ko.doctor_id = d.id
+            JOIN predictions p ON ko.prediction_id = p.id
+            WHERE ko.status = 'disetujui'
+              AND ko.reminder_sent = 0
+              AND ko.scheduled_at BETWEEN DATE_ADD(NOW(), INTERVAL 25 MINUTE) AND DATE_ADD(NOW(), INTERVAL 35 MINUTE)
+        """)
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        db.close()
+
+
+def get_upcoming_visit_reminders():
+    """Ambil kunjungan fisik yang visit_date-nya 25-35 menit dari sekarang, sudah dikonfirmasi dokter, dan belum dikirim reminder."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT lk.id, lk.visit_date,
+                   u.name AS user_name, u.email AS user_email,
+                   d.name AS doctor_name,
+                   p.label AS prediction_label
+            FROM laporan_kunjungan lk
+            JOIN predictions p ON lk.prediction_id = p.id
+            JOIN users u ON (lk.user_id = u.id OR lk.patient_id = u.id)
+            LEFT JOIN users d ON lk.confirmed_by = d.id
+            WHERE lk.status = 'terjadwal'
+              AND p.visit_confirmed = 1
+              AND lk.reminder_sent = 0
+              AND lk.visit_date BETWEEN DATE_ADD(NOW(), INTERVAL 25 MINUTE) AND DATE_ADD(NOW(), INTERVAL 35 MINUTE)
+        """)
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        db.close()
+
+
+def mark_telemed_reminder_sent(konsultasi_id: int):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("UPDATE konsultasi_online SET reminder_sent = 1 WHERE id = %s", (konsultasi_id,))
+        db.commit()
+    finally:
+        cursor.close()
+        db.close()
+
+
+def mark_visit_reminder_sent(laporan_id: int):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("UPDATE laporan_kunjungan SET reminder_sent = 1 WHERE id = %s", (laporan_id,))
+        db.commit()
     finally:
         cursor.close()
         db.close()
