@@ -13,7 +13,11 @@ import uuid
 from database import (
     get_db, get_disease_info_dict, log_activity,
     add_doctor_note, delete_doctor_note, get_doctor_notes_for_predictions,
-    confirm_visit, approve_telemed_request
+    confirm_visit, approve_telemed_request,
+    get_laporan_kunjungan_by_id, get_telemed_info,  
+)
+from core.email_service import (               
+    send_email, build_visit_confirmed_html, build_telemed_approved_html,
 )
 from core.state import templates
 from core.dependencies import require_role
@@ -330,13 +334,25 @@ async def dokter_confirm_visit(
     prediction_id: int,
     catatan: str = Form(""),
 ):
-    """Dokter menyetujui jadwal booking dan meneruskannya ke Laporan Owner."""
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    confirm_visit(prediction_id, patient_id, user["id"], catatan.strip() or None)
+    laporan_id = confirm_visit(prediction_id, patient_id, user["id"], catatan.strip() or None)
     log_activity(user["id"], "confirm_visit", f"Mengonfirmasi kunjungan #{prediction_id}")
+
+    laporan = get_laporan_kunjungan_by_id(laporan_id)
+    if laporan and laporan.get("patient_email") and laporan.get("patient_email") != "-" and laporan.get("visit_date"):
+        send_email(
+            to_email=laporan["patient_email"],
+            subject="✅ Kunjungan Klinik Anda Dikonfirmasi — Sakti Pet Care",
+            html_body=build_visit_confirmed_html(
+                user_name=laporan["patient_name"],
+                doctor_name=laporan["confirmed_by_name"],
+                prediction_label=laporan["label"],
+                visit_time=laporan["visit_date"].strftime("%d %b %Y, %H:%M WIB"),
+            ),
+        )
 
     return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)
 
@@ -468,15 +484,27 @@ async def dokter_update_disease_info(
 
 @router.post("/dokter/patients/{patient_id}/approve-telemed/{prediction_id}")
 async def dokter_approve_telemed(request: Request, patient_id: int, prediction_id: int):
-    """Dokter menyetujui request video call dari pasien."""
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
 
     room_id = f"room-{prediction_id}-{uuid.uuid4().hex[:6]}"
 
-    # Simpan ke database
     approve_telemed_request(prediction_id, user["id"], room_id)
     log_activity(user["id"], "approve_telemed", f"Menyetujui konsultasi online #{prediction_id}, Room: {room_id}")
+
+    telemed = get_telemed_info(prediction_id)
+    if telemed and telemed.get("user_email"):
+        send_email(
+            to_email=telemed["user_email"],
+            subject="✅ Konsultasi Online Anda Disetujui — Sakti Pet Care",
+            html_body=build_telemed_approved_html(
+                user_name=telemed["user_name"],
+                doctor_name=telemed["doctor_name"] or "Dokter",
+                prediction_label=telemed["prediction_label"],
+                scheduled_at_str=telemed["scheduled_at"].strftime("%d %b %Y, %H:%M WIB"),
+                room_url=f"http://127.0.0.1:8000/telemed/{room_id}",
+            ),
+        )
 
     return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)

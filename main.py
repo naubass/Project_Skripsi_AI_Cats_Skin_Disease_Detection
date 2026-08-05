@@ -14,6 +14,7 @@ load_dotenv()
 
 from database import init_db
 from core import state
+from core.scheduler import start_scheduler
 from controllers import (
     auth_controller,
     home_controller,
@@ -58,6 +59,8 @@ async def startup():
     except Exception as e:
         state.db_init_error = str(e)
         print(f"[STARTUP] init_db() gagal: {e}")
+
+    start_scheduler()
 
 @app.get("/health")
 async def health_check():
