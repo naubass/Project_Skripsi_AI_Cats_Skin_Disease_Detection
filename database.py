@@ -503,22 +503,37 @@ def get_doctor_notes_for_predictions(prediction_ids: list) -> dict:
 # ── Helper: Booking & Laporan Kunjungan ────────────────────────────────────────
 
 def get_booked_slots(date_str: str):
-    """Mengambil daftar jam (format HH:MM) yang sedang di-booking pasien lain (status 'terjadwal' atau 'selesai')."""
+    """Mengambil daftar jam (format HH:MM) yang sedang di-booking pasien lain,
+    baik untuk kunjungan fisik (laporan_kunjungan) maupun konsultasi online (konsultasi_online)."""
     db = get_db()
     cursor = db.cursor(dictionary=True)
     try:
         date_clean = date_str.strip()
+
+        # Slot dari kunjungan fisik
         cursor.execute(
-            """SELECT DATE_FORMAT(visit_date, '%H:%i') AS booked_time 
-               FROM laporan_kunjungan 
-               WHERE DATE(visit_date) = %s 
-                 AND status IN ('terjadwal', 'selesai') 
+            """SELECT DATE_FORMAT(visit_date, '%H:%i') AS booked_time
+               FROM laporan_kunjungan
+               WHERE DATE(visit_date) = %s
+                 AND status IN ('terjadwal', 'selesai')
                  AND visit_date IS NOT NULL""",
             (date_clean,)
         )
-        rows = cursor.fetchall()
-        # Mengembalikan list jam bersih tanpa detik, contoh: ['10:00', '20:00']
-        return [r["booked_time"].strip() for r in rows if r.get("booked_time")]
+        fisik_slots = [r["booked_time"].strip() for r in cursor.fetchall() if r.get("booked_time")]
+
+        # Slot dari konsultasi online
+        cursor.execute(
+            """SELECT DATE_FORMAT(scheduled_at, '%H:%i') AS booked_time
+               FROM konsultasi_online
+               WHERE DATE(scheduled_at) = %s
+                 AND status IN ('menunggu', 'disetujui', 'selesai')
+                 AND scheduled_at IS NOT NULL""",
+            (date_clean,)
+        )
+        online_slots = [r["booked_time"].strip() for r in cursor.fetchall() if r.get("booked_time")]
+
+        # Gabungkan & hapus duplikat
+        return list(set(fisik_slots + online_slots))
     finally:
         cursor.close()
         db.close()
