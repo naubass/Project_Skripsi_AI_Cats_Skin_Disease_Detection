@@ -65,33 +65,44 @@
 
   <main class="flex-1 p-5 md:p-8 min-w-0 overflow-y-auto">
 
-    <div class="flex items-center justify-between flex-wrap gap-4 mb-8">
+    <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
       <div>
         <span class="section-badge">📅 Jadwal</span>
         <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Booking Terjadwal</h1>
-        <p class="text-sm mt-1" style="color:var(--text-soft)">Daftar konsultasi yang sudah dikonfirmasi, diurutkan dari yang paling dekat.</p>
+        <p class="text-sm mt-1" style="color:var(--text-soft)">Kelola persetujuan dan lihat jadwal konsultasi pasien.</p>
       </div>
 
       <!-- Toggle Fisik / Online -->
       <div class="toggle-switch">
-        <a href="/dokter/bookings?tipe=fisik" class="toggle-btn {{ 'active' if tipe == 'fisik' else '' }}">
+        <a href="/dokter/bookings?tipe=fisik&status={{ status }}" class="toggle-btn {{ 'active' if tipe == 'fisik' else '' }}">
           🏥 Fisik
         </a>
-        <a href="/dokter/bookings?tipe=online" class="toggle-btn {{ 'active' if tipe == 'online' else '' }}">
+        <a href="/dokter/bookings?tipe=online&status={{ status }}" class="toggle-btn {{ 'active' if tipe == 'online' else '' }}">
           💻 Online
         </a>
       </div>
     </div>
 
+    <!-- Toggle Status: Menunggu / Terkonfirmasi -->
+    <div class="toggle-switch mb-6">
+      <a href="/dokter/bookings?tipe={{ tipe }}&status=pending" class="toggle-btn {{ 'active' if status == 'pending' else '' }}">
+        🔔 Menunggu Persetujuan
+      </a>
+      <a href="/dokter/bookings?tipe={{ tipe }}&status=confirmed" class="toggle-btn {{ 'active' if status == 'confirmed' else '' }}">
+        ✅ Terkonfirmasi
+      </a>
+    </div>
+
     <div class="stat-card mb-4">
       <p class="text-xs font-semibold" style="color:var(--text-soft)">
         Menampilkan <strong style="color:var(--purple-deep)">{{ bookings|length }}</strong> booking
-        {{ 'fisik' if tipe == 'fisik' else 'konsultasi online' }} yang telah dikonfirmasi.
+        {{ 'fisik' if tipe == 'fisik' else 'konsultasi online' }}
+        {{ 'yang menunggu persetujuan Anda.' if status == 'pending' else 'yang telah dikonfirmasi.' }}
       </p>
     </div>
 
     {% if bookings %}
-    <div class="space-y-3">
+    <div class="space-y-4">
       {% for b in bookings %}
       <div class="booking-card {{ 'past' if b.is_past else '' }}">
         <div class="flex items-start justify-between gap-4 flex-wrap">
@@ -116,7 +127,9 @@
 
           <div class="text-right flex-shrink-0">
             <p class="text-sm font-bold" style="color:var(--purple-deep)">{{ b.scheduled_at_formatted }}</p>
-            {% if b.is_past %}
+            {% if status == 'pending' %}
+            <span class="badge-conf mt-1 inline-block" style="background:#fef3c7;color:#b45309">🔔 Menunggu Persetujuan</span>
+            {% elif b.is_past %}
             <span class="badge-conf mt-1 inline-block" style="background:#e6f7ec;color:#1f9254">✅ Waktu Terlewati</span>
             {% elif tipe == 'online' %}
               {% if b.time_reached %}
@@ -125,18 +138,44 @@
               <span class="badge-conf mt-1 inline-block" style="background:#fef3c7;color:#b45309">⏳ Menunggu Waktu</span>
               {% endif %}
             {% else %}
-            <span class="badge-conf mt-1 inline-block" style="background:#fef3c7;color:#b45309">⏳ Akan Datang</span>
+              {% if b.time_reached %}
+              <span class="badge-conf mt-1 inline-block" style="background:#e0f2fe;color:#0369a1">🟢 Sudah Mulai</span>
+              {% else %}
+              <span class="badge-conf mt-1 inline-block" style="background:#fef3c7;color:#b45309">⏳ Akan Datang</span>
+              {% endif %}
             {% endif %}
           </div>
         </div>
 
-        <div class="flex items-center gap-2 mt-4 pt-4" style="border-top:1px solid var(--purple-pale)">
+        <div class="flex items-center gap-2 mt-4 pt-4 flex-wrap" style="border-top:1px solid var(--purple-pale)">
           <a href="/dokter/patients/{{ b.patient_id }}#record-{{ b.prediction_id }}"
              class="text-xs font-bold hover:opacity-70 transition-opacity" style="color:var(--purple-mid)">
             📄 Lihat Riwayat & Detail Pasien →
           </a>
 
-          {% if tipe == 'online' and b.room_id %}
+          {% if status == 'pending' %}
+            <div class="ml-auto flex items-center gap-2">
+              {% if tipe == 'fisik' %}
+                <form method="POST" action="/dokter/patients/{{ b.patient_id }}/confirm-visit/{{ b.prediction_id }}" class="inline">
+                  <input type="hidden" name="back" value="bookings">
+                  <button type="submit" class="text-xs font-bold px-3.5 py-2 rounded-xl text-white shadow-sm transition-colors bg-green-600 hover:bg-green-700">
+                    ✅ Setujui
+                  </button>
+                </form>
+                <button type="button" onclick="openRescheduleModal('{{ b.patient_id }}', '{{ b.prediction_id }}')"
+                        class="text-xs font-bold px-3.5 py-2 rounded-xl text-red-700 bg-red-100 hover:bg-red-200 transition-colors">
+                  🔄 Minta Reschedule
+                </button>
+              {% else %}
+                <form method="POST" action="/dokter/patients/{{ b.patient_id }}/approve-telemed/{{ b.prediction_id }}" class="inline">
+                  <input type="hidden" name="back" value="bookings">
+                  <button type="submit" class="text-xs font-bold px-3.5 py-2 rounded-xl text-white shadow-sm transition-colors bg-blue-600 hover:bg-blue-700">
+                    ✅ Setujui & Buat Ruang Video Call
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          {% elif tipe == 'online' and b.room_id %}
             {% if b.is_past %}
             <button type="button" disabled
                     class="ml-auto text-xs font-bold px-3.5 py-2 rounded-xl text-gray-500 bg-gray-200 cursor-not-allowed">
@@ -161,14 +200,55 @@
     {% else %}
     <div class="text-center py-24">
       <div class="w-20 h-20 rounded-full flex items-center justify-center text-4xl mx-auto mb-4" style="background:var(--purple-pale)">📭</div>
-      <h3 class="serif text-xl font-bold mb-1" style="color:var(--purple-deep)">Belum Ada Booking</h3>
+      <h3 class="serif text-xl font-bold mb-1" style="color:var(--purple-deep)">
+        {{ 'Tidak Ada yang Menunggu Persetujuan' if status == 'pending' else 'Belum Ada Booking' }}
+      </h3>
       <p class="text-sm max-w-xs mx-auto" style="color:var(--text-soft)">
+        {% if status == 'pending' %}
+        Semua booking {{ 'fisik' if tipe == 'fisik' else 'konsultasi online' }} sudah ditindaklanjuti.
+        {% else %}
         Belum ada booking {{ 'fisik' if tipe == 'fisik' else 'konsultasi online' }} yang dikonfirmasi saat ini.
+        {% endif %}
       </p>
     </div>
     {% endif %}
 
+    <!-- MODAL RESCHEDULE (untuk booking fisik pending) -->
+    <div id="reschedule-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+        <div class="flex items-center justify-between border-b pb-3 mb-4" style="border-color:var(--purple-pale)">
+          <h3 class="serif text-xl font-bold" style="color:var(--purple-deep)">Minta Reschedule</h3>
+          <button onclick="closeRescheduleModal()" class="text-gray-400 hover:text-gray-700 font-bold text-xl">✕</button>
+        </div>
+        <form id="reschedule-form" method="POST" action="" class="space-y-4">
+          <input type="hidden" name="back" value="bookings">
+          <div>
+            <label class="text-xs font-bold block mb-1" style="color:var(--text-dark)">Alasan / Catatan untuk Pasien</label>
+            <textarea name="catatan" rows="3" placeholder="Jelaskan alasan reschedule..."
+                      class="w-full text-xs p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-purple-300"
+                      style="border-color:var(--purple-pale)"></textarea>
+          </div>
+          <button type="submit" class="w-full py-3 rounded-xl text-sm font-bold text-red-700 bg-red-100 hover:bg-red-200 transition-colors">
+            🔄 Kirim Permintaan Reschedule
+          </button>
+        </form>
+      </div>
+    </div>
+
   </main>
 </div>
+
+<script>
+  function openRescheduleModal(patientId, predictionId) {
+    document.getElementById('reschedule-form').action = '/dokter/patients/' + patientId + '/reschedule-visit/' + predictionId;
+    document.getElementById('reschedule-modal').classList.remove('hidden');
+  }
+  function closeRescheduleModal() {
+    document.getElementById('reschedule-modal').classList.add('hidden');
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeRescheduleModal();
+  });
+</script>
 </body>
 </html>
