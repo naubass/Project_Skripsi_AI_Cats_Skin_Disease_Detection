@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jadwal Booking — Panel Dokter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --purple-deep: #2d1b69; --purple-mid: #4c2fa0; --purple-pale: #ede8f8;
+      --gold: #d4a843; --gold-pale: #fdf8ec; --cream: #faf8f5;
+      --text-dark: #1a1128; --text-mid: #4a3f6b; --text-soft: #8b7fb8;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); }
+    .serif { font-family: 'Cormorant Garamond', serif; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:14px; font-weight:600; color:var(--text-mid); transition:all .2s; }
+    .sidebar-link:hover { background:var(--purple-pale); color:var(--purple-mid); }
+    .sidebar-link.active { background:var(--purple-mid); color:#fff; }
+    .stat-card { background:#fff; border:1px solid rgba(212,168,67,0.15); border-radius:18px; padding:22px; }
+    .badge-conf { display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; white-space:nowrap; }
+    .section-badge { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:4px 10px; border-radius:99px; background:var(--purple-pale); color:var(--purple-mid); margin-bottom:12px; }
+
+    .toggle-switch {
+      display: inline-flex;
+      background: var(--purple-pale);
+      border-radius: 14px;
+      padding: 4px;
+      gap: 4px;
+    }
+    .toggle-btn {
+      padding: 10px 22px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      transition: all 0.2s;
+      color: var(--purple-mid);
+    }
+    .toggle-btn.active {
+      background: var(--purple-mid);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(76,47,160,0.3);
+    }
+
+    .booking-card {
+      background: #fff;
+      border: 1px solid rgba(212,168,67,0.15);
+      border-radius: 18px;
+      padding: 20px;
+      transition: all 0.2s;
+    }
+    .booking-card:hover {
+      border-color: var(--gold);
+      box-shadow: 0 8px 24px rgba(45,27,105,0.08);
+    }
+    .booking-card.past {
+      opacity: 0.55;
+    }
+  </style>
+</head>
+<body>
+
+<div class="flex flex-col md:flex-row min-h-screen">
+  {% include "dokter/_sidebar.html" %}
+
+  <main class="flex-1 p-5 md:p-8 min-w-0 overflow-y-auto">
+
+    <div class="flex items-center justify-between flex-wrap gap-4 mb-8">
+      <div>
+        <span class="section-badge">📅 Jadwal</span>
+        <h1 class="serif text-3xl font-bold" style="color:var(--purple-deep)">Booking Terjadwal</h1>
+        <p class="text-sm mt-1" style="color:var(--text-soft)">Daftar konsultasi yang sudah dikonfirmasi, diurutkan dari yang paling dekat.</p>
+      </div>
+
+      <!-- Toggle Fisik / Online -->
+      <div class="toggle-switch">
+        <a href="/dokter/bookings?tipe=fisik" class="toggle-btn {{ 'active' if tipe == 'fisik' else '' }}">
+          🏥 Fisik
+        </a>
+        <a href="/dokter/bookings?tipe=online" class="toggle-btn {{ 'active' if tipe == 'online' else '' }}">
+          💻 Online
+        </a>
+      </div>
+    </div>
+
+    <div class="stat-card mb-4">
+      <p class="text-xs font-semibold" style="color:var(--text-soft)">
+        Menampilkan <strong style="color:var(--purple-deep)">{{ bookings|length }}</strong> booking
+        {{ 'fisik' if tipe == 'fisik' else 'konsultasi online' }} yang telah dikonfirmasi.
+      </p>
+    </div>
+
+    {% if bookings %}
+    <div class="space-y-3">
+      {% for b in bookings %}
+      <div class="booking-card {{ 'past' if b.is_past else '' }}">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0"
+                 style="background:linear-gradient(135deg,var(--purple-mid),var(--purple-deep));color:#fff">
+              {{ b.patient_name[0]|upper }}
+            </div>
+            <div>
+              <p class="font-bold text-sm" style="color:var(--purple-deep)">{{ b.patient_name }}</p>
+              <p class="text-xs" style="color:var(--text-soft)">{{ b.patient_email }}</p>
+              <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
+                <span class="badge-conf" style="background:{{ 'var(--purple-pale)' }};color:var(--purple-mid)">
+                  🩺 {{ b.label }}
+                </span>
+                {% if b.pet_name %}
+                <span class="badge-conf" style="background:var(--gold-pale);color:#8a6200">🐱 {{ b.pet_name }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="text-right flex-shrink-0">
+            <p class="text-sm font-bold" style="color:var(--purple-deep)">{{ b.scheduled_at_formatted }}</p>
+            {% if b.is_past %}
+            <span class="badge-conf mt-1 inline-block" style="background:#e6f7ec;color:#1f9254">✅ Waktu Terlewati</span>
+            {% elif tipe == 'online' %}
+              {% if b.time_reached %}
+              <span class="badge-conf mt-1 inline-block" style="background:#e0f2fe;color:#0369a1">🟢 Siap Dibuka</span>
+              {% else %}
+              <span class="badge-conf mt-1 inline-block" style="background:#fef3c7;color:#b45309">⏳ Menunggu Waktu</span>
+              {% endif %}
+            {% else %}
+            <span class="badge-conf mt-1 inline-block" style="background:#fef3c7;color:#b45309">⏳ Akan Datang</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 mt-4 pt-4" style="border-top:1px solid var(--purple-pale)">
+          <a href="/dokter/patients/{{ b.patient_id }}#record-{{ b.prediction_id }}"
+             class="text-xs font-bold hover:opacity-70 transition-opacity" style="color:var(--purple-mid)">
+            📄 Lihat Riwayat & Detail Pasien →
+          </a>
+
+          {% if tipe == 'online' and b.room_id %}
+            {% if b.is_past %}
+            <button type="button" disabled
+                    class="ml-auto text-xs font-bold px-3.5 py-2 rounded-xl text-gray-500 bg-gray-200 cursor-not-allowed">
+              ⌛ Waktu Sudah Lewat
+            </button>
+            {% elif b.time_reached %}
+            <a href="/telemed/{{ b.room_id }}" target="_blank"
+               class="ml-auto text-xs font-bold px-3.5 py-2 rounded-xl text-white shadow-sm transition-colors bg-blue-600 hover:bg-blue-700">
+              📹 Masuk Ruang Video Call
+            </a>
+            {% else %}
+            <button type="button" disabled
+                    class="ml-auto text-xs font-bold px-3.5 py-2 rounded-xl text-gray-500 bg-gray-200 cursor-not-allowed">
+              ⏳ Belum Waktunya
+            </button>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-24">
+      <div class="w-20 h-20 rounded-full flex items-center justify-center text-4xl mx-auto mb-4" style="background:var(--purple-pale)">📭</div>
+      <h3 class="serif text-xl font-bold mb-1" style="color:var(--purple-deep)">Belum Ada Booking</h3>
+      <p class="text-sm max-w-xs mx-auto" style="color:var(--text-soft)">
+        Belum ada booking {{ 'fisik' if tipe == 'fisik' else 'konsultasi online' }} yang dikonfirmasi saat ini.
+      </p>
+    </div>
+    {% endif %}
+
+  </main>
+</div>
+</body>
+</html>

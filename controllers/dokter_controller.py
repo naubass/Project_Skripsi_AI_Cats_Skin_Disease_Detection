@@ -15,6 +15,7 @@ from database import (
     add_doctor_note, delete_doctor_note, get_doctor_notes_for_predictions,
     confirm_visit, approve_telemed_request,
     get_laporan_kunjungan_by_id, get_telemed_info,  
+    get_confirmed_bookings,
 )
 from core.email_service import (               
     send_email, build_visit_confirmed_html, build_telemed_approved_html,
@@ -156,6 +157,43 @@ async def dokter_patients_page(request: Request, page: int = 1, per_page: int = 
         "request": request, "user": user, "patients": patients,
         "active_page": "patients", "query": query,
         "page": page, "total_pages": total_pages, "total_data": total_data
+    })
+
+@router.get("/dokter/bookings", response_class=HTMLResponse)
+async def dokter_bookings_page(request: Request, tipe: str = "fisik"):
+    user = require_role(request, ["dokter"])
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    if tipe not in ("fisik", "online"):
+        tipe = "fisik"
+
+    bookings = get_confirmed_bookings(tipe)
+
+    now = datetime.now()
+    GRACE_PERIOD_MINUTES = 60  # toleransi setelah jadwal sebelum dianggap expired
+
+    for b in bookings:
+        if b.get("scheduled_at") and isinstance(b["scheduled_at"], datetime):
+            raw_dt = b["scheduled_at"]
+            expiry_dt = raw_dt + timedelta(minutes=GRACE_PERIOD_MINUTES)
+
+            b["scheduled_at_formatted"] = raw_dt.strftime("%d %b %Y, %H:%M WIB")
+            b["is_past"] = now > expiry_dt
+            b["time_reached"] = raw_dt <= now
+            b["_sort_dt"] = raw_dt
+            b["scheduled_at"] = raw_dt.strftime("%Y-%m-%d %H:%M")
+        else:
+            b["scheduled_at_formatted"] = "-"
+            b["is_past"] = False
+            b["time_reached"] = False
+            b["_sort_dt"] = datetime.max
+
+    bookings.sort(key=lambda b: (b["is_past"], b["_sort_dt"]))
+
+    return templates.TemplateResponse("dokter/bookings.html", {
+        "request": request, "user": user, "bookings": bookings,
+        "tipe": tipe, "active_page": "bookings"
     })
 
 
