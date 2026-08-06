@@ -15,7 +15,7 @@ from database import (
     add_doctor_note, delete_doctor_note, get_doctor_notes_for_predictions,
     confirm_visit, approve_telemed_request,
     get_laporan_kunjungan_by_id, get_telemed_info,  
-    get_confirmed_bookings,
+    get_confirmed_bookings, get_pending_bookings
 )
 from core.email_service import (               
     send_email, build_visit_confirmed_html, build_telemed_approved_html,
@@ -160,18 +160,23 @@ async def dokter_patients_page(request: Request, page: int = 1, per_page: int = 
     })
 
 @router.get("/dokter/bookings", response_class=HTMLResponse)
-async def dokter_bookings_page(request: Request, tipe: str = "fisik"):
+async def dokter_bookings_page(request: Request, tipe: str = "fisik", status: str = "confirmed"):
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
 
     if tipe not in ("fisik", "online"):
         tipe = "fisik"
+    if status not in ("confirmed", "pending"):
+        status = "confirmed"
 
-    bookings = get_confirmed_bookings(tipe)
+    if status == "pending":
+        bookings = get_pending_bookings(tipe)
+    else:
+        bookings = get_confirmed_bookings(tipe)
 
     now = datetime.now()
-    GRACE_PERIOD_MINUTES = 60  # toleransi setelah jadwal sebelum dianggap expired
+    GRACE_PERIOD_MINUTES = 60
 
     for b in bookings:
         if b.get("scheduled_at") and isinstance(b["scheduled_at"], datetime):
@@ -189,11 +194,15 @@ async def dokter_bookings_page(request: Request, tipe: str = "fisik"):
             b["time_reached"] = False
             b["_sort_dt"] = datetime.max
 
-    bookings.sort(key=lambda b: (b["is_past"], b["_sort_dt"]))
+    if status == "confirmed":
+        bookings.sort(key=lambda b: (b["is_past"], b["_sort_dt"]))
+    else:
+        # Pending: urutkan dari yang paling mendesak (jadwal terdekat) di atas
+        bookings.sort(key=lambda b: b["_sort_dt"])
 
     return templates.TemplateResponse("dokter/bookings.html", {
         "request": request, "user": user, "bookings": bookings,
-        "tipe": tipe, "active_page": "bookings"
+        "tipe": tipe, "status": status, "active_page": "bookings"
     })
 
 
@@ -371,6 +380,7 @@ async def dokter_confirm_visit(
     patient_id: int,
     prediction_id: int,
     catatan: str = Form(""),
+    back: str = Form(""),
 ):
     user = require_role(request, ["dokter"])
     if not user:
@@ -392,6 +402,8 @@ async def dokter_confirm_visit(
             ),
         )
 
+    if back == "bookings":
+        return RedirectResponse("/dokter/bookings?tipe=fisik&status=pending", status_code=302)
     return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)
 
 @router.post("/dokter/patients/{patient_id}/reschedule-visit/{prediction_id}")
@@ -400,6 +412,7 @@ async def dokter_reschedule_visit(
     patient_id: int,
     prediction_id: int,
     catatan: str = Form(""),
+    back: str = Form(""),
 ):
     """Dokter meminta reschedule. Status laporan di-set 'batal' dan tanda konfirmasi di prediksi di-reset ke 0."""
     user = require_role(request, ["dokter"])
@@ -411,7 +424,6 @@ async def dokter_reschedule_visit(
     try:
         pesan_reschedule = f"[RESCHEDULE_DOKTER] {catatan.strip()}" if catatan.strip() else "[RESCHEDULE_DOKTER] Dokter meminta Anda untuk memilih jadwal kunjungan ulang."
         
-        # 1. Update laporan kunjungan menjadi batal dan kosongkan rujukan dokter
         cursor.execute("SELECT id FROM laporan_kunjungan WHERE prediction_id = %s", (prediction_id,))
         existing = cursor.fetchone()
         
@@ -429,7 +441,6 @@ async def dokter_reschedule_visit(
                 (prediction_id, patient_id, patient_id, pesan_reschedule)
             )
 
-        # 2. PENTING: Reset tanda visit_confirmed pada tabel predictions kembali ke 0
         cursor.execute(
             """UPDATE predictions 
                SET visit_confirmed = 0, visit_confirmed_at = NULL 
@@ -447,6 +458,8 @@ async def dokter_reschedule_visit(
 
     log_activity(user["id"], "reschedule_visit", f"Meminta reschedule kunjungan #{prediction_id}")
 
+    if back == "bookings":
+        return RedirectResponse("/dokter/bookings?tipe=fisik&status=pending", status_code=302)
     return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)
 
 
@@ -521,7 +534,7 @@ async def dokter_update_disease_info(
     return RedirectResponse(f"/dokter/disease-info?msg=Info '{label}' berhasil diperbarui", status_code=302)
 
 @router.post("/dokter/patients/{patient_id}/approve-telemed/{prediction_id}")
-async def dokter_approve_telemed(request: Request, patient_id: int, prediction_id: int):
+async def dokter_approve_telemed(request: Request, patient_id: int, prediction_id: int, back: str = Form("")):
     user = require_role(request, ["dokter"])
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -545,4 +558,6 @@ async def dokter_approve_telemed(request: Request, patient_id: int, prediction_i
             ),
         )
 
+    if back == "bookings":
+        return RedirectResponse("/dokter/bookings?tipe=online&status=pending", status_code=302)
     return RedirectResponse(f"/dokter/patients/{patient_id}#record-{prediction_id}", status_code=302)

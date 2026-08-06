@@ -635,6 +635,42 @@ def get_confirmed_bookings(tipe: str = "fisik") -> list:
         cursor.close()
         db.close()
 
+def get_pending_bookings(tipe: str = "fisik") -> list:
+    """Ambil booking yang MASIH MENUNGGU persetujuan dokter."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    try:
+        if tipe == "online":
+            cursor.execute("""
+                SELECT ko.id AS booking_id, ko.scheduled_at, ko.status,
+                       p.id AS prediction_id, p.label, p.confidence, p.pet_id,
+                       pets.name AS pet_name,
+                       u.id AS patient_id, u.name AS patient_name, u.email AS patient_email
+                FROM konsultasi_online ko
+                JOIN predictions p ON ko.prediction_id = p.id
+                JOIN users u ON ko.user_id = u.id
+                LEFT JOIN pets ON pets.id = p.pet_id
+                WHERE ko.status = 'menunggu'
+                ORDER BY ko.scheduled_at ASC
+            """)
+        else:
+            cursor.execute("""
+                SELECT lk.id AS booking_id, lk.visit_date AS scheduled_at, lk.status,
+                       p.id AS prediction_id, p.label, p.confidence, p.pet_id,
+                       pets.name AS pet_name,
+                       u.id AS patient_id, u.name AS patient_name, u.email AS patient_email
+                FROM laporan_kunjungan lk
+                JOIN predictions p ON lk.prediction_id = p.id
+                JOIN users u ON (lk.user_id = u.id OR lk.patient_id = u.id)
+                LEFT JOIN pets ON pets.id = p.pet_id
+                WHERE lk.status = 'terjadwal' AND p.visit_confirmed = 0
+                ORDER BY lk.visit_date ASC
+            """)
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        db.close()
+
 def auto_update_expired_visits():
     """Mengubah status 'terjadwal' menjadi 'selesai' secara otomatis jika waktu booking sudah lewat."""
     db = get_db()
