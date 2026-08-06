@@ -1,6 +1,8 @@
 /CAT SKIN DISEASE
 /saved_model
 /saved_model.zip
+__pycache__/
+*.pyc
 
 # Environment
 .env
