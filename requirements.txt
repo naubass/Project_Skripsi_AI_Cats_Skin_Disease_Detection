@@ -19,3 +19,6 @@ itsdangerous==2.2.0
 langchain-groq==1.1.1
 langchain-core==1.2.7
 httpx==0.28.1
+
+# Scheduler untuk reminder email
+apscheduler==3.10.4
