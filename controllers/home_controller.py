@@ -19,6 +19,7 @@ from database import (
 )
 from core.state import templates
 from core.dependencies import get_current_user
+from core.image_quality import validate_image_quality
 from core.model import preprocess_image, predict_tflite, CLASS_NAMES
 
 router = APIRouter(tags=["home"])
@@ -59,9 +60,23 @@ async def predict(request: Request, file: UploadFile = File(...), pet_id: str = 
 
     valid_pet_id = int(pet_id)
 
+    image_bytes = await file.read()
+
+    # ── VALIDASI KUALITAS GAMBAR (Blur & Pencahayaan) ──
+    quality_check = validate_image_quality(image_bytes)
+    if not quality_check["valid"]:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": True,
+                "reason": quality_check["reason"],
+                "message": quality_check["message"],
+                "details": quality_check["details"],
+            },
+        )
+
     disease_info = get_disease_info_dict()
 
-    image_bytes = await file.read()
     img_array   = preprocess_image(image_bytes)
     probs       = predict_tflite(img_array)
     idx         = int(np.argmax(probs))
