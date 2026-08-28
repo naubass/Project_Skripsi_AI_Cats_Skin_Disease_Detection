@@ -520,6 +520,14 @@
           <p class="text-xs mt-2" style="color:var(--text-soft)">Sakti Pet Care CatSkin sedang menganalisis</p>
         </div>
 
+        <!-- Quality Error State -->
+        <div id="quality-error-state" class="hidden h-full flex flex-col items-center justify-center text-center py-20">
+          <div id="quality-error-icon" class="w-24 h-24 rounded-full flex items-center justify-center text-5xl mb-6" style="background:#fde8e8">🌫️</div>
+          <h3 class="text-xl font-bold" style="color:#c0392b">Kualitas Gambar Kurang Baik</h3>
+          <p id="quality-error-message" class="mt-2 max-w-xs" style="color:var(--text-mid)"></p>
+          <button onclick="resetApp()" class="mt-6 btn-gold px-6 py-3 rounded-2xl text-sm">📸 Unggah Ulang Foto</button>
+        </div>
+
         <!-- Result Content -->
         <div id="result-content" class="hidden space-y-7 animate-fade-in">
           <!-- Header -->
@@ -759,7 +767,7 @@
   }
 
   /* ── API ─────────────────────────────────── */
-  async function processAnalysis() {
+    async function processAnalysis() {
     if (!selectedBlob) return;
 
     const petSelect = document.getElementById('pet-select');
@@ -769,6 +777,7 @@
     }
 
     document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('quality-error-state').classList.add('hidden');
     document.getElementById('result-content').classList.add('hidden');
     document.getElementById('loading-state').classList.remove('hidden');
     document.getElementById('result-view').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -778,7 +787,14 @@
     fd.append('pet_id', petSelect.value);
 
     try {
-      const res  = await fetch('/predict', { method: 'POST', body: fd });
+      const res = await fetch('/predict', { method: 'POST', body: fd });
+
+      if (res.status === 422) {
+        const errData = await res.json();
+        showQualityError(errData);
+        return;
+      }
+
       if (!res.ok) throw new Error("Gagal menghubungi server AI.");
       const data = await res.json();
       renderResult(data);
@@ -786,6 +802,17 @@
       alert("Error: " + err.message);
       resetApp();
     }
+  }
+
+  function showQualityError(errData) {
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('result-content').classList.add('hidden');
+    document.getElementById('empty-state').classList.add('hidden');
+
+    const iconMap = { blur: '🌫️', gelap: '🌑', terang: '☀️' };
+    document.getElementById('quality-error-icon').textContent = iconMap[errData.reason] || '⚠️';
+    document.getElementById('quality-error-message').textContent = errData.message;
+    document.getElementById('quality-error-state').classList.remove('hidden');
   }
 
   function renderResult(data) {
@@ -834,6 +861,7 @@
     analyzeBtn.disabled = true;
     document.getElementById('result-content').classList.add('hidden');
     document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('quality-error-state').classList.add('hidden');
     document.getElementById('empty-state').classList.remove('hidden');
   }
 
